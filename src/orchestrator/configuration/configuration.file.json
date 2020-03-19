@@ -1,0 +1,12 @@
+[
+    {
+        "consumerGroup": "CG1",
+        "maxConsumers": 10,
+        "topic": "T1"
+    },
+    {
+        "consumerGroup": "CG2",
+        "maxConsumers": 5,
+        "topic": "T2"
+    }
+]

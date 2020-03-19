@@ -1,0 +1,42 @@
+{
+    "name": "kafka-node-rx",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "test": "mocha -r ts-node/register src/**/*.spec.ts",
+        "tsc": "tsc",
+        "lint": "eslint src/**/*.ts",
+        "lint:fix": "eslint src/**/*.ts --fix"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/EnricoPicci/elastic-kafka-consumers-node-rxjs"
+    },
+    "keywords": [
+        "kafka",
+        "node",
+        "rxjs",
+        "javascript",
+        "typescript"
+    ],
+    "author": "Picci",
+    "bugs": {
+        "url": "https://github.com/EnricoPicci/elastic-kafka-consumers-node-rxjs/issues"
+    },
+    "homepage": "https://github.com/EnricoPicci/elastic-kafka-consumers-node-rxjs#readme",
+    "devDependencies": {
+        "@types/chai": "^4.2.9",
+        "@types/mocha": "^7.0.1",
+        "@types/node": "^13.7.4",
+        "chai": "^4.2.0",
+        "mocha": "^7.0.1",
+        "ts-node": "^8.6.2",
+        "typescript": "^3.8.2"
+    },
+    "dependencies": {
+        "kafkajs": "^1.12.0",
+        "observable-fs": "^2.1.6",
+        "rxjs": "^6.5.4"
+    }
+}
