@@ -1,7 +1,18 @@
 import { from, forkJoin, Observable, Subscriber, TeardownLogic } from 'rxjs';
 import { map, expand, filter, delay, first, tap, concatMap, mergeMap } from 'rxjs/operators';
 
-import { KafkaConfig, ITopicConfig, Kafka, Admin, ResourceConfigQuery, Consumer, KafkaMessage } from 'kafkajs';
+import {
+    KafkaConfig,
+    ITopicConfig,
+    Kafka,
+    Admin,
+    ResourceConfigQuery,
+    Consumer,
+    KafkaMessage,
+    logLevel,
+    Producer,
+    ProducerRecord,
+} from 'kafkajs';
 
 export const connectAdminClient = (config: KafkaConfig) => {
     const kafka = new Kafka(config);
@@ -61,7 +72,6 @@ export const deleteTopics = (adminClient: Admin, topics: string[], timeout?: num
             return from(adminClient.deleteTopics(options)).pipe(map(() => topicsToBeDeleted));
         }),
         expand((topicsToBeDeleted, index) => {
-            console.log('try delete', index, topicsToBeDeleted);
             if (index > maxAttempts) {
                 throw new Error(
                     `Topics ${topicsToBeDeleted} not deleted yet after ${_delay * maxAttempts} milliseconds`,
@@ -88,10 +98,11 @@ export const deleteCreateTopics = (adminClient: Admin, topics: ITopicConfig[], t
     );
 };
 
-// given an array of topic names, returns the topics that exist and whose name is in the array of names passed in
+// given an array of topic names, returns the topics that exist
 export const existingTopics = (adminClient: Admin, topicNames: string[]) => {
     return fetchTopicMetadata(adminClient).pipe(map(({ topics }) => topics.filter(t => topicNames.includes(t.name))));
 };
+// given an array of topic names, returns the topics that DON NOT exist
 export const nonExistingTopics = (adminClient: Admin, topicNames: string[]) => {
     return fetchTopicMetadata(adminClient).pipe(
         map(({ topics }) => {
@@ -103,4 +114,48 @@ export const nonExistingTopics = (adminClient: Admin, topicNames: string[]) => {
 
 export const fetchTopicMetadata = (adminClient: Admin, topics?: string[]) => {
     return from(adminClient.fetchTopicMetadata({ topics }));
+};
+
+export const connectConsumer = (config: KafkaConfig, groupId: string) => {
+    const kafka = new Kafka(config);
+    const consumer = kafka.consumer({ groupId });
+    return from(consumer.connect()).pipe(map(() => consumer));
+};
+
+export const subscribeConsumerToTopic = (consumer: Consumer, topic: string, fromBeginning = true) => {
+    return from(consumer.subscribe({ topic, fromBeginning })).pipe(map(() => topic));
+};
+
+export const connectProducer = (config: KafkaConfig) => {
+    const kafka = new Kafka(config);
+    const producer = kafka.producer();
+    return from(producer.connect()).pipe(map(() => producer));
+};
+
+export const sendRecord = (producer: Producer, producerRecord: ProducerRecord) => {
+    return from(producer.send(producerRecord));
+};
+
+export type ConsumerMessage = {
+    topic: string;
+    partition: any;
+    kafkaMessage: KafkaMessage;
+    done: () => void;
+};
+export const consumerMessages = (consumer: Consumer) => {
+    return new Observable<ConsumerMessage>(
+        (subscriber: Subscriber<ConsumerMessage>): TeardownLogic => {
+            consumer.run({
+                autoCommit: false,
+                eachMessage: async ({ topic, partition, message }) => {
+                    console.log('>>>>>>>>>', message.key?.toString(), message.value?.toString());
+                    const offset = (parseInt(message.offset) + 1).toString();
+                    const done = () => {
+                        consumer.commitOffsets([{ topic, partition, offset }]);
+                    };
+                    subscriber.next({ topic, partition, kafkaMessage: message, done });
+                },
+            });
+        },
+    );
 };

@@ -4,7 +4,7 @@
     "description": "",
     "main": "index.js",
     "scripts": {
-        "test": "mocha -r ts-node/register src/**/*.spec.ts",
+        "test": "mocha -r ts-node/register \"src/**/*.spec.ts\"",
         "tsc": "tsc",
         "lint": "eslint src/**/*.ts",
         "lint:fix": "eslint src/**/*.ts --fix"

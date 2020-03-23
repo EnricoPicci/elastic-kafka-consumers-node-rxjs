@@ -1,4 +1,8 @@
 export const testConfiguration = {
     brokers: ['localhost:9092'],
-    //  brokers: ['localhost:29092'],
+
+    consumerClientId: 'TestConsumer',
+    producerClientId: 'TestProducer',
+    groupId: 'TestGroupId',
+    topicName: 'TestTopicForProdAndCons',
 };

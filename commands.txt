@@ -1,3 +1,7 @@
 # Removing all unused containers, volumes, networks and images...
 docker system prune --volumes -f
 
+docker-compose -f docker-compose.2_3.yml up --force-recreate
+docker-compose -f docker-compose.2_3.yml ps
+docker-compose -f docker-compose.2_3.yml rm
+
