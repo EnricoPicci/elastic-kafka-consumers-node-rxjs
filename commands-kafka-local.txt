@@ -1,0 +1,18 @@
+# Clean kafka
+stop kafka server(s)
+stop zookeeper
+rm -rf /Users/administrator/kafka-data/zookeeper/*
+rm -rf /Users/administrator/kafka-data/kafka-logs
+mkdir /Users/administrator/kafka-data/kafka-logs
+
+# Start zookeper
+zookeeper-server-start.sh /Users/administrator/kafka_2.12-2.3.0/config/zookeeper.properties
+
+# Start a kafka server
+kafka-server-start.sh /Users/administrator/kafka_2.12-2.3.0/config/server.properties
+
+# List all topics
+kafka-topics.sh --zookeeper localhost:2181 --list
+
+# Delete a topic
+kafka-topics.sh --zookeeper localhost:2181 --delete --topic 'topic-name.*'
