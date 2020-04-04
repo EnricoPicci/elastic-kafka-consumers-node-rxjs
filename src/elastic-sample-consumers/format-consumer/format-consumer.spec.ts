@@ -9,14 +9,14 @@ import {
     sendRecord,
 } from '../../observable-kafkajs/observable-kafkajs';
 import { tap, concatMap, take } from 'rxjs/operators';
-import { LogConsumer } from './log-consumer';
+import { FormatConsumer } from './format-consumer';
 
-describe(`when a LogConsumer subscribes to a Topic`, () => {
+describe(`when a FormatConsumer subscribes to a Topic`, () => {
     let adminClient: Admin;
-    let topicForLogConsumer: string;
+    let topicForFormatConsumer: string;
     let producer: Producer;
     before(`create the Topic, the Producer and the Consumer`, done => {
-        const clientId = 'LogConsumer';
+        const clientId = 'FormatConsumer';
         const kafkaConfig: KafkaConfig = {
             clientId,
             brokers: testConfiguration.brokers,
@@ -25,10 +25,10 @@ describe(`when a LogConsumer subscribes to a Topic`, () => {
                 retries: 3,
             },
         };
-        topicForLogConsumer = testConfiguration.topicName + '_LogConsumer_' + Date.now().toString();
+        topicForFormatConsumer = testConfiguration.topicName + '_FormatConsumer_' + Date.now().toString();
         const topics: ITopicConfig[] = [
             {
-                topic: topicForLogConsumer,
+                topic: topicForFormatConsumer,
             },
         ];
         connectAdminClient(kafkaConfig)
@@ -59,8 +59,8 @@ describe(`when a LogConsumer subscribes to a Topic`, () => {
             err => done(err),
         );
     });
-    it(`it logs any message a Producer sends to the topic`, done => {
-        const messageValue = 'The value of message for a LogConsumer ' + Date.now().toString();
+    it(`it formats any message a Producer sends to the topic`, done => {
+        const messageValue = 'The value of message for a FormatConsumer ' + Date.now().toString();
         const messages: Message[] = [
             {
                 value: messageValue,
@@ -68,35 +68,38 @@ describe(`when a LogConsumer subscribes to a Topic`, () => {
         ];
         const producerRecord: ProducerRecord = {
             messages,
-            topic: topicForLogConsumer,
+            topic: topicForFormatConsumer,
         };
-        // Create the log consumer
-        const logConsumer = new LogConsumer(
-            'My Test Log Consumer',
+        // Create the format consumer
+        const formatConsumer = new FormatConsumer(
+            'My Test Format Consumer',
             testConfiguration.brokers,
-            topicForLogConsumer,
+            topicForFormatConsumer,
             testConfiguration.groupId,
         );
-        let loggedMessage: string;
-        logConsumer.logger = message => (loggedMessage = message.value.toString());
+        let formattedMessage: string;
+        formatConsumer.formatter = message => {
+            formattedMessage = message.value.toString() + ' FORMATTED';
+            return formattedMessage;
+        };
         // The Producer sends a record
         sendRecord(producer, producerRecord)
             .pipe(
                 // The consumer starts
-                concatMap(() => logConsumer.start()),
-                tap(() => expect(loggedMessage).to.equal(messageValue)),
+                concatMap(() => formatConsumer.start()),
+                tap(() => expect(formattedMessage).to.equal(messageValue)),
                 take(1), // to complete the Observable
             )
             .subscribe({
                 error: err => {
                     console.error('ERROR', err);
                     producer.disconnect();
-                    logConsumer.disconnect();
+                    formatConsumer.disconnect();
                     done(err);
                 },
                 complete: () => {
                     producer.disconnect();
-                    logConsumer.disconnect();
+                    formatConsumer.disconnect();
                     done();
                 },
             });
