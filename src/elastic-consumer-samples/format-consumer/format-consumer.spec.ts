@@ -15,7 +15,7 @@ describe(`when a FormatConsumer subscribes to a Topic`, () => {
     let adminClient: Admin;
     let topicForFormatConsumer: string;
     let producer: Producer;
-    before(`create the Topic, the Producer and the Consumer`, done => {
+    before(`create the Topic, the Producer and the Consumer`, (done) => {
         const clientId = 'FormatConsumer';
         const kafkaConfig: KafkaConfig = {
             clientId,
@@ -33,15 +33,15 @@ describe(`when a FormatConsumer subscribes to a Topic`, () => {
         ];
         connectAdminClient(kafkaConfig)
             .pipe(
-                tap(_adminClient => (adminClient = _adminClient)),
+                tap((_adminClient) => (adminClient = _adminClient)),
                 concatMap(() => createTopics(adminClient, topics)),
                 tap(() => adminClient.disconnect()),
                 concatMap(() => connectProducer(kafkaConfig)),
-                tap(_producer => (producer = _producer)),
+                tap((_producer) => (producer = _producer)),
                 tap(() => done()),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     if (adminClient) {
                         adminClient.disconnect();
                     }
@@ -53,13 +53,13 @@ describe(`when a FormatConsumer subscribes to a Topic`, () => {
                 },
             });
     });
-    after(`disconnects the Producer and the Consumer`, done => {
+    after(`disconnects the Producer and the Consumer`, (done) => {
         producer.disconnect().then(
             () => done(),
-            err => done(err),
+            (err) => done(err),
         );
     });
-    it(`it formats any message a Producer sends to the topic`, done => {
+    it(`it formats any message a Producer sends to the topic`, (done) => {
         const messageValue = 'The value of message for a FormatConsumer ' + Date.now().toString();
         const messages: Message[] = [
             {
@@ -73,12 +73,13 @@ describe(`when a FormatConsumer subscribes to a Topic`, () => {
         // Create the format consumer
         const formatConsumer = new FormatConsumer(
             'My Test Format Consumer',
+            0,
             testConfiguration.brokers,
             topicForFormatConsumer,
             testConfiguration.groupId,
         );
         let formattedMessage: string;
-        formatConsumer.formatter = message => {
+        formatConsumer.formatter = (message) => {
             formattedMessage = message.value.toString() + ' FORMATTED';
             return formattedMessage;
         };
@@ -86,12 +87,12 @@ describe(`when a FormatConsumer subscribes to a Topic`, () => {
         sendRecord(producer, producerRecord)
             .pipe(
                 // The consumer starts
-                concatMap(() => formatConsumer.start()),
-                tap(() => expect(formattedMessage).to.equal(messageValue)),
+                concatMap(() => formatConsumer.consume()),
+                tap((msg) => expect(msg).to.equal(formattedMessage)),
                 take(1), // to complete the Observable
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     producer.disconnect();
                     formatConsumer.disconnect();

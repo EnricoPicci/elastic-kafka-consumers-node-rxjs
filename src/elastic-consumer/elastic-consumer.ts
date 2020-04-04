@@ -4,28 +4,44 @@ import { connectConsumer, subscribeConsumerToTopic, consumerMessages } from '../
 import { concatMap, tap, map } from 'rxjs/operators';
 
 export abstract class ElasticConsumer<T> {
-    private consumer: Consumer;
+    protected consumer: Consumer;
 
     constructor(
-        private name: string,
-        private brokers: string[],
-        private topic: string,
-        private consumerGroup: string,
+        protected name: string,
+        protected id: number,
+        protected brokers: string[],
+        protected topic: string,
+        protected consumerGroup: string,
     ) {}
 
     abstract processMessage(message: KafkaMessage): T;
 
     start() {
+        this.consume().subscribe({
+            error: (err) => {
+                console.error(err);
+            },
+            complete: () => {
+                console.log(`Elastic Consumer ${this.name} (id: ${this.id}) completed`);
+            },
+        });
+    }
+
+    consume() {
+        return connectConsumer(this.kafkaConfig(), this.consumerGroup).pipe(
+            tap((consumer) => (this.consumer = consumer)),
+            concatMap(() => subscribeConsumerToTopic(this.consumer, this.topic)),
+            concatMap(() => consumerMessages(this.consumer)),
+            map((message) => this.processMessage(message.kafkaMessage)),
+        );
+    }
+
+    kafkaConfig() {
         const kafkaConfig: KafkaConfig = {
             clientId: this.name,
             brokers: this.brokers,
         };
-        return connectConsumer(kafkaConfig, this.consumerGroup).pipe(
-            tap(consumer => (this.consumer = consumer)),
-            concatMap(() => subscribeConsumerToTopic(this.consumer, this.topic)),
-            concatMap(() => consumerMessages(this.consumer)),
-            map(message => this.processMessage(message.kafkaMessage)),
-        );
+        return kafkaConfig;
     }
 
     disconnect() {

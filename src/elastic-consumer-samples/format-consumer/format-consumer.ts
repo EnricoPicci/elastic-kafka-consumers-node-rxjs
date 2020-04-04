@@ -7,7 +7,6 @@ export class FormatConsumer extends ElasticConsumer<string> {
         `KafkaMessage  key: ${msg.key}  offset: ${msg.offset}  value: "${msg.value.toString()}"`;
 
     processMessage(message: KafkaMessage) {
-        this.formatter(message);
-        return message.value.toString();
+        return this.formatter(message);
     }
 }

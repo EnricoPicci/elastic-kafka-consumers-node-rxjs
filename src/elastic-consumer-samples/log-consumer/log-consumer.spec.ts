@@ -15,7 +15,7 @@ describe(`when a LogConsumer subscribes to a Topic`, () => {
     let adminClient: Admin;
     let topicForLogConsumer: string;
     let producer: Producer;
-    before(`create the Topic, the Producer and the Consumer`, done => {
+    before(`create the Topic, the Producer and the Consumer`, (done) => {
         const clientId = 'LogConsumer';
         const kafkaConfig: KafkaConfig = {
             clientId,
@@ -33,15 +33,15 @@ describe(`when a LogConsumer subscribes to a Topic`, () => {
         ];
         connectAdminClient(kafkaConfig)
             .pipe(
-                tap(_adminClient => (adminClient = _adminClient)),
+                tap((_adminClient) => (adminClient = _adminClient)),
                 concatMap(() => createTopics(adminClient, topics)),
                 tap(() => adminClient.disconnect()),
                 concatMap(() => connectProducer(kafkaConfig)),
-                tap(_producer => (producer = _producer)),
+                tap((_producer) => (producer = _producer)),
                 tap(() => done()),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     if (adminClient) {
                         adminClient.disconnect();
                     }
@@ -53,13 +53,13 @@ describe(`when a LogConsumer subscribes to a Topic`, () => {
                 },
             });
     });
-    after(`disconnects the Producer and the Consumer`, done => {
+    after(`disconnects the Producer and the Consumer`, (done) => {
         producer.disconnect().then(
             () => done(),
-            err => done(err),
+            (err) => done(err),
         );
     });
-    it(`it logs any message a Producer sends to the topic`, done => {
+    it(`it logs any message a Producer sends to the topic`, (done) => {
         const messageValue = 'The value of message for a LogConsumer ' + Date.now().toString();
         const messages: Message[] = [
             {
@@ -73,22 +73,23 @@ describe(`when a LogConsumer subscribes to a Topic`, () => {
         // Create the log consumer
         const logConsumer = new LogConsumer(
             'My Test Log Consumer',
+            0,
             testConfiguration.brokers,
             topicForLogConsumer,
             testConfiguration.groupId,
         );
         let loggedMessage: string;
-        logConsumer.logger = message => (loggedMessage = message.value.toString());
+        logConsumer.logger = (message) => (loggedMessage = message.value.toString());
         // The Producer sends a record
         sendRecord(producer, producerRecord)
             .pipe(
                 // The consumer starts
-                concatMap(() => logConsumer.start()),
+                concatMap(() => logConsumer.consume()),
                 tap(() => expect(loggedMessage).to.equal(messageValue)),
                 take(1), // to complete the Observable
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     producer.disconnect();
                     logConsumer.disconnect();
