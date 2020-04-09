@@ -11,6 +11,7 @@ import {
 import { tap, concatMap, take } from 'rxjs/operators';
 import { Passthrough } from './passthrough';
 import { LogConsumer } from '../../elastic-consumer-samples/log-consumer/log-consumer';
+import { of } from 'rxjs';
 
 describe(`when a Passthrough subscribes to a Topic`, () => {
     let adminClient: Admin;
@@ -102,7 +103,10 @@ describe(`when a Passthrough subscribes to a Topic`, () => {
         passthrough.start();
 
         let finalConsumerLoggedMessage: string;
-        finalConsumer.logger = (message) => (finalConsumerLoggedMessage = message.value.toString());
+        finalConsumer.logger = (message) => {
+            finalConsumerLoggedMessage = message.value.toString();
+            return of(`Message ${message} logged by Test Passthrough`);
+        };
         // The Producer sends a record
         sendRecord(initialProducer, initialProducerRecord)
             .pipe(

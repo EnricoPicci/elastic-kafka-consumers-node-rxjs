@@ -13,6 +13,7 @@ export abstract class ElasticConsumer<T> {
         protected brokers: string[],
         protected topic: string,
         protected consumerGroup: string,
+        private concurrency = 1,
     ) {}
 
     abstract processMessage(message: KafkaMessage): Observable<T>;
@@ -33,7 +34,7 @@ export abstract class ElasticConsumer<T> {
             tap((consumer) => (this.consumer = consumer)),
             concatMap(() => subscribeConsumerToTopic(this.consumer, this.topic)),
             concatMap(() => consumerMessages(this.consumer)),
-            mergeMap((message) => this.processMessage(message.kafkaMessage)),
+            mergeMap((message) => this.processMessage(message.kafkaMessage), this.concurrency),
         );
     }
 
