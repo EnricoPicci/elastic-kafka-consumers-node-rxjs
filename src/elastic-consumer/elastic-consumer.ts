@@ -1,7 +1,8 @@
 import { KafkaMessage, KafkaConfig, Consumer } from 'kafkajs';
 
 import { connectConsumer, subscribeConsumerToTopic, consumerMessages } from '../observable-kafkajs/observable-kafkajs';
-import { concatMap, tap, map } from 'rxjs/operators';
+import { concatMap, tap, map, mergeMap } from 'rxjs/operators';
+import { Observable } from 'rxjs';
 
 export abstract class ElasticConsumer<T> {
     protected consumer: Consumer;
@@ -14,7 +15,7 @@ export abstract class ElasticConsumer<T> {
         protected consumerGroup: string,
     ) {}
 
-    abstract processMessage(message: KafkaMessage): T;
+    abstract processMessage(message: KafkaMessage): Observable<T>;
 
     start() {
         this.consume().subscribe({
@@ -32,7 +33,7 @@ export abstract class ElasticConsumer<T> {
             tap((consumer) => (this.consumer = consumer)),
             concatMap(() => subscribeConsumerToTopic(this.consumer, this.topic)),
             concatMap(() => consumerMessages(this.consumer)),
-            map((message) => this.processMessage(message.kafkaMessage)),
+            mergeMap((message) => this.processMessage(message.kafkaMessage)),
         );
     }
 

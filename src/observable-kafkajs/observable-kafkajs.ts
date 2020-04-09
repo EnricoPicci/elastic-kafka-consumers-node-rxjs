@@ -26,24 +26,26 @@ export const createTopics = (adminClient: Admin, topics: ITopicConfig[]) => {
     let _topicsToCreate: ITopicConfig[];
     return existingTopics(
         adminClient,
-        topics.map(t => t.topic),
+        topics.map((t) => t.topic),
     ).pipe(
-        tap(_existingTopics => {
+        tap((_existingTopics) => {
             if (_existingTopics.length > 0) {
                 console.log(
-                    `These topics "${_existingTopics.map(t => t.name)}" do already exist and therefore are not created`,
+                    `These topics "${_existingTopics.map(
+                        (t) => t.name,
+                    )}" do already exist and therefore are not created`,
                 );
             }
         }),
-        map(_existingTopics => {
-            const _existingTopicNames = _existingTopics.map(t => t.name);
-            _topicsToCreate = topics.filter(t => !_existingTopicNames.includes(t.topic));
+        map((_existingTopics) => {
+            const _existingTopicNames = _existingTopics.map((t) => t.name);
+            _topicsToCreate = topics.filter((t) => !_existingTopicNames.includes(t.topic));
             return _topicsToCreate;
         }),
-        concatMap(topicsToCreate => from(adminClient.createTopics({ topics: topicsToCreate }))),
-        map(topicsCreated => {
+        concatMap((topicsToCreate) => from(adminClient.createTopics({ topics: topicsToCreate }))),
+        map((topicsCreated) => {
             if (topicsCreated) {
-                return _topicsToCreate.map(t => t.topic);
+                return _topicsToCreate.map((t) => t.topic);
             } else {
                 const errorMessage =
                     topics.length === 1
@@ -60,13 +62,13 @@ export const deleteTopics = (adminClient: Admin, topics: string[], timeout?: num
     const maxAttempts = timeout ? Math.floor(timeout / _delay) : 10;
     let _topicsToBeDeleted: string[];
     return nonExistingTopics(adminClient, topics).pipe(
-        tap(_nonExistingTopics => {
+        tap((_nonExistingTopics) => {
             if (_nonExistingTopics.length > 0) {
                 console.log(`These topics ${_nonExistingTopics} do not exist and therefore are not cancelled`);
             }
         }),
-        map(_nonExistingTopics => topics.filter(t => !_nonExistingTopics.includes(t))),
-        concatMap(topicsToBeDeleted => {
+        map((_nonExistingTopics) => topics.filter((t) => !_nonExistingTopics.includes(t))),
+        concatMap((topicsToBeDeleted) => {
             _topicsToBeDeleted = topicsToBeDeleted;
             const options = timeout ? { topics: topicsToBeDeleted, timeout } : { topics: topicsToBeDeleted };
             return from(adminClient.deleteTopics(options)).pipe(map(() => topicsToBeDeleted));
@@ -79,7 +81,7 @@ export const deleteTopics = (adminClient: Admin, topics: string[], timeout?: num
             }
             return existingTopics(adminClient, topics).pipe(delay(_delay));
         }),
-        filter(_existingTopics => {
+        filter((_existingTopics) => {
             return _existingTopics.length === 0;
         }),
         first(),
@@ -90,24 +92,24 @@ export const deleteTopics = (adminClient: Admin, topics: string[], timeout?: num
 export const deleteCreateTopics = (adminClient: Admin, topics: ITopicConfig[], timeout?: number) => {
     return deleteTopics(
         adminClient,
-        topics.map(t => t.topic),
+        topics.map((t) => t.topic),
         timeout,
     ).pipe(
-        tap(topicsDeleted => console.log('Topics deleted', topicsDeleted)),
+        tap((topicsDeleted) => console.log('Topics deleted', topicsDeleted)),
         concatMap(() => createTopics(adminClient, topics)),
     );
 };
 
 // given an array of topic names, returns the topics that exist
 export const existingTopics = (adminClient: Admin, topicNames: string[]) => {
-    return fetchTopicMetadata(adminClient).pipe(map(({ topics }) => topics.filter(t => topicNames.includes(t.name))));
+    return fetchTopicMetadata(adminClient).pipe(map(({ topics }) => topics.filter((t) => topicNames.includes(t.name))));
 };
 // given an array of topic names, returns the topics that DON NOT exist
 export const nonExistingTopics = (adminClient: Admin, topicNames: string[]) => {
     return fetchTopicMetadata(adminClient).pipe(
         map(({ topics }) => {
-            const existingTopicNames = topics.map(t => t.name);
-            return topicNames.filter(t => !existingTopicNames.includes(t));
+            const existingTopicNames = topics.map((t) => t.name);
+            return topicNames.filter((t) => !existingTopicNames.includes(t));
         }),
     );
 };

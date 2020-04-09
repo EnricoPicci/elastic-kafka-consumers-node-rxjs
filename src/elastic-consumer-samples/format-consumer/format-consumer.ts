@@ -1,5 +1,6 @@
 import { ElasticConsumer } from '../../elastic-consumer/elastic-consumer';
 import { KafkaMessage } from 'kafkajs';
+import { of } from 'rxjs';
 
 export class FormatConsumer extends ElasticConsumer<string> {
     // the default formatter provides a default implementation of formatting logic
@@ -7,6 +8,6 @@ export class FormatConsumer extends ElasticConsumer<string> {
         `KafkaMessage  key: ${msg.key}  offset: ${msg.offset}  value: "${msg.value.toString()}"`;
 
     processMessage(message: KafkaMessage) {
-        return this.formatter(message);
+        return of(this.formatter(message));
     }
 }

@@ -1,5 +1,6 @@
 import { ElasticConsumerProducer } from '../../elastic-consumer-producer/elastic-consumer-producer';
 import { KafkaMessage } from 'kafkajs';
+import { of } from 'rxjs';
 
 export class Passthrough extends ElasticConsumerProducer<string> {
     logger: (message: KafkaMessage) => void = console.log;
@@ -10,6 +11,6 @@ export class Passthrough extends ElasticConsumerProducer<string> {
 
     processMessage(message: KafkaMessage) {
         this.logger(message);
-        return message.value.toString();
+        return of(message.value.toString());
     }
 }
