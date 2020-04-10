@@ -10,7 +10,7 @@ import {
 } from '../../observable-kafkajs/observable-kafkajs';
 import { tap, concatMap, take, toArray, delay } from 'rxjs/operators';
 import { DoConsumer } from './do-consumer';
-import { of } from 'rxjs';
+import { of, Subscription } from 'rxjs';
 
 describe(`when a DoConsumer subscribes to a Topic and a Producer sends one message to that Topic`, () => {
     let adminClient: Admin;
@@ -216,7 +216,7 @@ describe(`when a DoConsumer subscribes to a Topic and a Producer sends MORE than
     }).timeout(60000);
 });
 
-describe(`when a DoConsumer subscribes to a Topic with coincurrency set to 1
+describe(`when a DoConsumer subscribes to a Topic  and the concurrency is set to 1
 and a Producer sends MORE than one message to that Topic`, () => {
     let adminClient: Admin;
     const topicForDoConsumer = 'ConcurrencyOne_DoConsumer_' + Date.now().toString();
@@ -335,7 +335,7 @@ and a Producer sends MORE than one message to that Topic`, () => {
     }).timeout(60000);
 });
 
-describe(`when a DoConsumer subscribes to a Topic with coincurrency set to greater than 1
+describe(`when a DoConsumer subscribes to a Topic and the concurrency is set to greater than 1
 and a Producer sends MORE than one message to that Topic`, () => {
     let adminClient: Admin;
     const topicForDoConsumer = 'ConcurrencyN_DoConsumer_' + Date.now().toString();
@@ -384,7 +384,7 @@ and a Producer sends MORE than one message to that Topic`, () => {
         );
     });
 
-    it(`it processes the messages concurrenly reaching the expected level of concurrency`, (done) => {
+    it(`it processes the messages concurrently reaching the expected level of concurrency`, (done) => {
         const concurrency = 3;
         const numberOfMessages = concurrency * 2;
         const messageValues = new Array(numberOfMessages)
@@ -456,4 +456,160 @@ and a Producer sends MORE than one message to that Topic`, () => {
                 },
             });
     }).timeout(60000);
+});
+
+describe(`when concurrency is increased after a DoConsumer has started consuming messages`, () => {
+    let adminClient: Admin;
+    const topicForDoConsumer = 'IncreaseConcurrency_DoConsumer_' + Date.now().toString();
+    let producer: Producer;
+    before(`create the Topic and the Producer`, (done) => {
+        const clientId = 'IncreaseConcurrencyDoConsumer';
+        const kafkaConfig: KafkaConfig = {
+            clientId,
+            brokers: testConfiguration.brokers,
+            retry: {
+                initialRetryTime: 100,
+                retries: 3,
+            },
+        };
+        const topics: ITopicConfig[] = [
+            {
+                topic: topicForDoConsumer,
+            },
+        ];
+        connectAdminClient(kafkaConfig)
+            .pipe(
+                tap((_adminClient) => (adminClient = _adminClient)),
+                concatMap(() => createTopics(adminClient, topics)),
+                tap(() => adminClient.disconnect()),
+                concatMap(() => connectProducer(kafkaConfig)),
+                tap((_producer) => (producer = _producer)),
+                tap(() => done()),
+            )
+            .subscribe({
+                error: (err) => {
+                    if (adminClient) {
+                        adminClient.disconnect();
+                    }
+                    if (producer) {
+                        producer.disconnect();
+                    }
+                    console.error('ERROR', err);
+                    done(err);
+                },
+            });
+    });
+    after(`disconnects the Producer`, (done) => {
+        producer.disconnect().then(
+            () => done(),
+            (err) => done(err),
+        );
+    });
+
+    it(`more messages are processed concurrently`, (done) => {
+        const numberOfMessages = 10;
+        const messageValuesConcurrency_1 = new Array(numberOfMessages)
+            .fill(null)
+            .map((_, i) => `Message_${i}_concurrency_1_value for a DoConsumer`);
+        const messagesConcurrency_1 = messageValuesConcurrency_1.map((value) => ({
+            value,
+        }));
+        const producerRecordConcurrency_1: ProducerRecord = {
+            messages: messagesConcurrency_1,
+            topic: topicForDoConsumer,
+        };
+        const messageValuesConcurrency_N = new Array(numberOfMessages)
+            .fill(null)
+            .map((_, i) => `Message_${i}_concurrency_N_value for a DoConsumer`);
+        const messagesConcurrency_N = messageValuesConcurrency_N.map((value) => ({
+            value,
+        }));
+        const producerRecordConcurrency_N: ProducerRecord = {
+            messages: messagesConcurrency_N,
+            topic: topicForDoConsumer,
+        };
+        // Create the DoConsumer starting with default a certain concurrency
+        let currentConcurrency = 1;
+        const doConsumer = new DoConsumer(
+            'My Test Do Consumer Processing Messages with increased concurrency',
+            0,
+            testConfiguration.brokers,
+            topicForDoConsumer,
+            'DoConsumer_Test_ProcessMessagesWithIncreasedConcurrency',
+            currentConcurrency,
+        );
+        // In order to check the level of concurrency,
+        // the function pushes a message in a dictionary, registers the size of the dictionary
+        // and wait for some time before removing the message and returning
+        // If the processing is performed concurrently with the expected level of concurrency
+        // the dictionary size at some point should reach the size of the expected concurrency
+        // and should never exceed it
+        let messageDictionary: { [message: string]: string } = {};
+        let messageDictionarySize: number[] = [];
+        doConsumer.doer = (message) => {
+            const messagePushedInTheDictionary = message.value.toString();
+            messageDictionary[messagePushedInTheDictionary] = messagePushedInTheDictionary;
+            messageDictionarySize.push(Object.keys(messageDictionary).length);
+            return of(`${messagePushedInTheDictionary} processed by DoConsumer`).pipe(
+                delay(400),
+                tap(() => {
+                    const myMessage = messageDictionary[messagePushedInTheDictionary];
+                    console.log(messagePushedInTheDictionary);
+                    expect(myMessage).to.be.not.undefined;
+                    delete messageDictionary[messagePushedInTheDictionary];
+                }),
+            );
+        };
+
+        const sendRecordsSubscriptions: Subscription[] = [];
+        // The Producer sends the first set of records
+        sendRecordsSubscriptions.push(sendRecord(producer, producerRecordConcurrency_1).subscribe());
+
+        let waitTime = 5000;
+        // After some time we increase the concurrency level
+        setTimeout(() => {
+            currentConcurrency = 5
+            doConsumer.increaseConcurrency.next(currentConcurrency);
+        }, waitTime);
+        // After some more time the Producer sends the second set of records
+        waitTime = waitTime + waitTime;
+        setTimeout(() => {
+            sendRecordsSubscriptions.push(sendRecord(producer, producerRecordConcurrency_N).subscribe());
+        }, waitTime);
+
+        // The consumer starts consuming messages
+        doConsumer
+            .consume()
+            .pipe(
+                take(messagesConcurrency_1.length * 2 + messagesConcurrency_N.length), // to complete the Observable
+                tap(message => {
+                    if (!messageDictionarySize.includes(currentConcurrency)) {
+                        console.log(messageDictionarySize)
+                    }
+                    expect(messageDictionarySize.includes(currentConcurrency)).to.be.true;
+
+                    messageDictionarySize.forEach((size) => {
+                        if (size > currentConcurrency) {
+                            console.log(message)
+                        }
+                        expect(size).to.be.lte(currentConcurrency);
+                    });
+                }),
+            )
+            .subscribe({
+                error: (err) => {
+                    console.error('ERROR', err);
+                    producer.disconnect();
+                    doConsumer.disconnect();
+                    done(err);
+                },
+                complete: () => {
+                    expect(sendRecordsSubscriptions.length).to.equal(2)
+                    sendRecordsSubscriptions.forEach(s => s.unsubscribe())
+                    producer.disconnect();
+                    doConsumer.disconnect();
+                    done();
+                },
+            });
+    }).timeout(600000);
 });
