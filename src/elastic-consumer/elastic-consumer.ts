@@ -1,11 +1,12 @@
 import { KafkaMessage, KafkaConfig, Consumer } from 'kafkajs';
 
 import { connectConsumer, subscribeConsumerToTopic, consumerMessages } from '../observable-kafkajs/observable-kafkajs';
-import { concatMap, tap, map, mergeMap, switchMap } from 'rxjs/operators';
-import { Observable, Subject, BehaviorSubject, of, from, defer } from 'rxjs';
+import { concatMap, tap, map, mergeMap, switchMap, scan } from 'rxjs/operators';
+import { Observable, BehaviorSubject, Subject } from 'rxjs';
 
 export abstract class ElasticConsumer<T> {
     protected consumer: Consumer;
+    private _changeConcurrency = new BehaviorSubject<number>(this._concurrency);
     increaseConcurrency: BehaviorSubject<number>;
     _increaseConcurrency: Observable<number>;
 
@@ -15,13 +16,8 @@ export abstract class ElasticConsumer<T> {
         protected brokers: string[],
         protected topic: string,
         protected consumerGroup: string,
-        private concurrency = 1,
-    ) {
-        this.increaseConcurrency = new BehaviorSubject<number>(this.concurrency);
-        this._increaseConcurrency = this.increaseConcurrency.pipe(
-            map((_concurrency) => (this.concurrency = _concurrency)),
-        );
-    }
+        private _concurrency = 1,
+    ) {}
 
     abstract processMessage(message: KafkaMessage): Observable<T>;
 
@@ -37,21 +33,17 @@ export abstract class ElasticConsumer<T> {
     }
 
     consume() {
-        const stream_ = () => {
-            const start = this.consumer ? from(this.consumer.disconnect()) : of(null);
-            return start.pipe(
-                concatMap(() => connectConsumer(this.kafkaConfig(), this.consumerGroup)),
-                tap((consumer) => (this.consumer = consumer)),
-                concatMap(() => subscribeConsumerToTopic(this.consumer, this.topic)),
-                tap(() => console.log('!!!!!!!!! concurrency is ', this.concurrency)),
-                switchMap(() =>
-                    consumerMessages(this.consumer).pipe(
-                        mergeMap((message) => this.processMessage(message.kafkaMessage), this.concurrency),
-                    ),
+        return connectConsumer(this.kafkaConfig(), this.consumerGroup).pipe(
+            tap((consumer) => (this.consumer = consumer)),
+            concatMap(() => subscribeConsumerToTopic(this.consumer, this.topic)),
+            concatMap(() => this._changeConcurrency),
+            tap(() => console.log('!!!!!!!!! concurrency is ', this._concurrency)),
+            switchMap(() =>
+                consumerMessages(this.consumer).pipe(
+                    mergeMap((message) => this.processMessage(message.kafkaMessage), this._concurrency),
                 ),
-            );
-        };
-        return this._increaseConcurrency.pipe(switchMap(() => stream_()));
+            ),
+        );
     }
 
     kafkaConfig() {
@@ -64,5 +56,13 @@ export abstract class ElasticConsumer<T> {
 
     disconnect() {
         return this.consumer.disconnect();
+    }
+
+    get concurrency() {
+        return this._concurrency;
+    }
+    changeConcurrency(variation: number) {
+        this._concurrency = this._concurrency + variation <= 1 ? 1 : this._concurrency + variation;
+        this._changeConcurrency.next(this._concurrency);
     }
 }

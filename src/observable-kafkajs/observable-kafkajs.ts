@@ -1,18 +1,7 @@
-import { from, forkJoin, Observable, Subscriber, TeardownLogic } from 'rxjs';
-import { map, expand, filter, delay, first, tap, concatMap, mergeMap } from 'rxjs/operators';
+import { from, Observable, Subscriber, TeardownLogic } from 'rxjs';
+import { map, expand, filter, delay, first, tap, concatMap } from 'rxjs/operators';
 
-import {
-    KafkaConfig,
-    ITopicConfig,
-    Kafka,
-    Admin,
-    ResourceConfigQuery,
-    Consumer,
-    KafkaMessage,
-    logLevel,
-    Producer,
-    ProducerRecord,
-} from 'kafkajs';
+import { KafkaConfig, ITopicConfig, Kafka, Admin, Consumer, KafkaMessage, Producer, ProducerRecord } from 'kafkajs';
 
 export const connectAdminClient = (config: KafkaConfig) => {
     const kafka = new Kafka(config);
@@ -145,19 +134,27 @@ export type ConsumerMessage = {
     done: () => void;
 };
 export const consumerMessages = (consumer: Consumer) => {
+    const rxjsSubscriberPropertyName = '_rxjs_subscriber_';
     return new Observable<ConsumerMessage>(
         (subscriber: Subscriber<ConsumerMessage>): TeardownLogic => {
-            consumer.run({
-                autoCommit: false,
-                eachMessage: async ({ topic, partition, message }) => {
-                    console.log('>>>>>>>>>', message.key?.toString(), message.value?.toString());
-                    const offset = (parseInt(message.offset) + 1).toString();
-                    const done = () => {
-                        consumer.commitOffsets([{ topic, partition, offset }]);
-                    };
-                    subscriber.next({ topic, partition, kafkaMessage: message, done });
-                },
-            });
+            // store the rxjs subscriber as property of the Kafka consumer
+            consumer[rxjsSubscriberPropertyName] = subscriber;
+            // this check is to avoid calling 'run' more than once on the same Kafka consumer
+            if (!consumer['running']) {
+                consumer['running'] = true;
+                consumer.run({
+                    autoCommit: false,
+                    eachMessage: async ({ topic, partition, message }) => {
+                        console.log('>>>>>>>>>', message.key?.toString(), message.value?.toString());
+                        const offset = (parseInt(message.offset) + 1).toString();
+                        const done = () => {
+                            consumer.commitOffsets([{ topic, partition, offset }]);
+                        };
+                        // the new rxjs subscriber, stored in the Kafka consumer, is the object whose 'next' method is called
+                        consumer[rxjsSubscriberPropertyName].next({ topic, partition, kafkaMessage: message, done });
+                    },
+                });
+            }
         },
     );
 };
