@@ -1,14 +1,16 @@
 import { KafkaMessage, KafkaConfig, Consumer } from 'kafkajs';
 
 import { connectConsumer, subscribeConsumerToTopic, consumerMessages } from '../observable-kafkajs/observable-kafkajs';
-import { concatMap, tap, map, mergeMap, switchMap, scan } from 'rxjs/operators';
-import { Observable, BehaviorSubject, Subject } from 'rxjs';
+import { concatMap, tap, mergeMap, switchMap } from 'rxjs/operators';
+import { Observable, BehaviorSubject, Subscription } from 'rxjs';
+import { cpuUsageStream } from './cpu-usage';
 
 export abstract class ElasticConsumer<T> {
     protected consumer: Consumer;
     private _changeConcurrency = new BehaviorSubject<number>(this._concurrency);
-    increaseConcurrency: BehaviorSubject<number>;
-    _increaseConcurrency: Observable<number>;
+    private increaseConcurrency: BehaviorSubject<number>;
+    private _increaseConcurrency: Observable<number>;
+    private cpuUsageStreamSubscription: Subscription;
 
     constructor(
         protected name: string,
@@ -17,6 +19,8 @@ export abstract class ElasticConsumer<T> {
         protected topic: string,
         protected consumerGroup: string,
         private _concurrency = 1,
+        private _cpuUsageCheckFrequency = 2000,
+        private _cpuUsageThreshold = 60,
     ) {}
 
     abstract processMessage(message: KafkaMessage): Observable<T>;
@@ -32,7 +36,10 @@ export abstract class ElasticConsumer<T> {
         });
     }
 
-    consume() {
+    consume(concurrencyAdjustment = false) {
+        if (concurrencyAdjustment) {
+            this.startAutomaticConcurrencyAdjustment();
+        }
         return connectConsumer(this.kafkaConfig(), this.consumerGroup).pipe(
             tap((consumer) => (this.consumer = consumer)),
             concatMap(() => subscribeConsumerToTopic(this.consumer, this.topic)),
@@ -55,6 +62,7 @@ export abstract class ElasticConsumer<T> {
     }
 
     disconnect() {
+        this.cpuUsageStreamSubscription?.unsubscribe();
         return this.consumer.disconnect();
     }
 
@@ -64,5 +72,18 @@ export abstract class ElasticConsumer<T> {
     changeConcurrency(variation: number) {
         this._concurrency = this._concurrency + variation <= 1 ? 1 : this._concurrency + variation;
         this._changeConcurrency.next(this._concurrency);
+    }
+    startAutomaticConcurrencyAdjustment() {
+        this.cpuUsageStreamSubscription = cpuUsageStream(this._cpuUsageCheckFrequency)
+            .pipe(
+                tap((_cpuUsage) => {
+                    if (_cpuUsage > this._cpuUsageThreshold) {
+                        this.changeConcurrency(-1);
+                    } else if (_cpuUsage < this._cpuUsageThreshold * 0.6) {
+                        this.changeConcurrency(1);
+                    }
+                }),
+            )
+            .subscribe();
     }
 }
