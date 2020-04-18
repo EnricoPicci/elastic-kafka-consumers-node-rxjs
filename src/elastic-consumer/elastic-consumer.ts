@@ -8,8 +8,6 @@ import { cpuUsageStream } from './cpu-usage';
 export abstract class ElasticConsumer<T> {
     protected consumer: Consumer;
     private _changeConcurrency = new BehaviorSubject<number>(this._concurrency);
-    private increaseConcurrency: BehaviorSubject<number>;
-    private _increaseConcurrency: Observable<number>;
     private cpuUsageStreamSubscription: Subscription;
 
     constructor(

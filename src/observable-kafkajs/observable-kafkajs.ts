@@ -110,6 +110,23 @@ export const fetchTopicMetadata = (adminClient: Admin, topics?: string[]) => {
 export const connectConsumer = (config: KafkaConfig, groupId: string) => {
     const kafka = new Kafka(config);
     const consumer = kafka.consumer({ groupId });
+    // consumer.on(consumer.events.CONNECT, (e) => {
+    //     console.log(`consmuer connected at ${e}`);
+    // });
+    // return new Observable<Consumer>(
+    //     (subscriber: Subscriber<Consumer>): TeardownLogic => {
+    //         consumer.connect().then(
+    //             () => {
+    //                 console.log('consumer connected');
+    //                 consumer.on(consumer.events.CONNECT, (e) => {
+    //                     console.log(`consmuer connected at ${e}`);
+    //                     subscriber.next(consumer);
+    //                 });
+    //             },
+    //             (e) => console.error('error while connecting', e),
+    //         );
+    //     },
+    // );
     return from(consumer.connect()).pipe(map(() => consumer));
 };
 

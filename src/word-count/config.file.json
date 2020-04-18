@@ -1,0 +1,22 @@
+{
+    "brokers": ["localhost:9092"],
+    "topics": [
+        { "name": "files", "partitions": 4 },
+        { "name": "uris", "partitions": 4 }
+    ],
+    "doConsumers": [
+        {
+            "name": "count_words_files",
+            "inputTopic": "files",
+            "function": "countWordsFile",
+            "functionModule": "count-words-file"
+        },
+        {
+            "name": "count_words_uris",
+            "inputTopic": "uris",
+            "function": "countWordsUri",
+            "functionModule": "count-words-file",
+            "concurrency": 1
+        }
+    ]
+}

@@ -30,11 +30,11 @@ function _buildAdminClient(clientId: string, done: (err?) => void, result: { adm
     };
     connectAdminClient(kafkaConfig)
         .pipe(
-            tap(_adminClient => (result.adminClient = _adminClient)),
+            tap((_adminClient) => (result.adminClient = _adminClient)),
             tap(() => done()),
         )
         .subscribe({
-            error: err => {
+            error: (err) => {
                 if (result.adminClient) {
                     result.adminClient.disconnect();
                 }
@@ -45,7 +45,7 @@ function _buildAdminClient(clientId: string, done: (err?) => void, result: { adm
 }
 function _disconnectAdminClient(adminClient: Admin, done: (err?) => void) {
     disconnectAdminClient(adminClient).subscribe({
-        error: err => {
+        error: (err) => {
             if (adminClient) {
                 adminClient.disconnect();
             }
@@ -57,7 +57,7 @@ function _disconnectAdminClient(adminClient: Admin, done: (err?) => void) {
 }
 
 describe(`connectAdminClient function`, () => {
-    it(`creates an admin client when passed valid brokers`, done => {
+    it(`creates an admin client when passed valid brokers`, (done) => {
         const kafkaConfig: KafkaConfig = {
             clientId: 'connectAdminClient-test',
             brokers: testConfiguration.brokers,
@@ -69,20 +69,20 @@ describe(`connectAdminClient function`, () => {
 
         connectAdminClient(kafkaConfig)
             .pipe(
-                tap(adminClient => {
+                tap((adminClient) => {
                     expect(adminClient).to.be.not.undefined;
                     adminClient.disconnect();
                     done();
                 }),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     done(err);
                 },
             });
     });
-    it(`errors when passed invalid brokers`, done => {
+    it(`errors when passed invalid brokers`, (done) => {
         const kafkaConfig: KafkaConfig = {
             clientId: 'connectAdminClient-test',
             brokers: ['invalidhost:9999'],
@@ -94,11 +94,11 @@ describe(`connectAdminClient function`, () => {
         };
 
         connectAdminClient(kafkaConfig).subscribe({
-            next: data => {
+            next: (data) => {
                 console.error('It should not pass here', data);
                 done('It should not next');
             },
-            error: err => {
+            error: (err) => {
                 expect(err).to.be.not.undefined;
                 done();
             },
@@ -111,7 +111,7 @@ describe(`connectAdminClient function`, () => {
 });
 
 describe(`disconnectAdminClient function`, () => {
-    it(`disconnects a connected client`, done => {
+    it(`disconnects a connected client`, (done) => {
         let adminClient: Admin;
 
         const kafkaConfig: KafkaConfig = {
@@ -125,7 +125,7 @@ describe(`disconnectAdminClient function`, () => {
 
         connectAdminClient(kafkaConfig)
             .pipe(
-                tap(_adminClient => {
+                tap((_adminClient) => {
                     adminClient = _adminClient;
                     (adminClient.logger() as any).setLogLevel(logLevel.NOTHING);
                 }),
@@ -140,11 +140,11 @@ describe(`disconnectAdminClient function`, () => {
                 }),
             )
             .subscribe({
-                next: data => {
+                next: (data) => {
                     console.error('It should not pass here', data);
                     done('It should not next');
                 },
-                error: err => {
+                error: (err) => {
                     expect(err).to.be.not.undefined;
                     expect(err.message).to.equal('Closed connection');
                     done();
@@ -159,13 +159,13 @@ describe(`disconnectAdminClient function`, () => {
 
 describe(`createTopics function`, () => {
     const connectionData = { adminClient: null };
-    before(`create the admin client`, done => {
+    before(`create the admin client`, (done) => {
         _buildAdminClient('createTopics-test', done, connectionData);
     });
-    after(`disconnect the admin client`, done => {
+    after(`disconnect the admin client`, (done) => {
         _disconnectAdminClient(connectionData.adminClient, done);
     });
-    it(`creates a new topic`, done => {
+    it(`creates a new topic`, (done) => {
         const adminClient = connectionData.adminClient;
         const newTopicName = 'TestTopic' + Date.now().toString();
         const topics: ITopicConfig[] = [
@@ -176,20 +176,20 @@ describe(`createTopics function`, () => {
 
         createTopics(adminClient, topics)
             .pipe(
-                tap(topicsCreated => {
+                tap((topicsCreated) => {
                     expect(topicsCreated.length).to.equal(topics.length);
-                    expect(topicsCreated.find(t => t === topics[0].topic)).to.be.not.undefined;
+                    expect(topicsCreated.find((t) => t === topics[0].topic)).to.be.not.undefined;
                 }),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     done(err);
                 },
                 complete: () => done(),
             });
     });
-    it(`creates more than one topic`, done => {
+    it(`creates more than one topic`, (done) => {
         const adminClient = connectionData.adminClient;
         const newTopicName_1 = 'TestTopic_1_' + Date.now().toString();
         const newTopicName_2 = 'TestTopic_2_' + Date.now().toString();
@@ -204,15 +204,15 @@ describe(`createTopics function`, () => {
 
         createTopics(adminClient, topics)
             .pipe(
-                tap(topicsCreated => {
+                tap((topicsCreated) => {
                     expect(topicsCreated.length).to.equal(topics.length);
-                    topics.forEach(topicToBeCreated => {
-                        expect(topicsCreated.find(t => t === topicToBeCreated.topic)).to.be.not.undefined;
+                    topics.forEach((topicToBeCreated) => {
+                        expect(topicsCreated.find((t) => t === topicToBeCreated.topic)).to.be.not.undefined;
                     });
                 }),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     done(err);
                 },
@@ -223,30 +223,30 @@ describe(`createTopics function`, () => {
 
 describe(`existingTopics function`, () => {
     const connectionData = { adminClient: null };
-    before(`create the admin client`, done => {
+    before(`create the admin client`, (done) => {
         _buildAdminClient('existingTopics-test', done, connectionData);
     });
-    after(`disconnect the admin client`, done => {
+    after(`disconnect the admin client`, (done) => {
         _disconnectAdminClient(connectionData.adminClient, done);
     });
-    it(`returns an empty array since none of the topics actually exists`, done => {
+    it(`returns an empty array since none of the topics actually exists`, (done) => {
         const topicNames = ['nonexiastingtopic1', 'nonexiastingtopic1'];
         const adminClient = connectionData.adminClient;
         existingTopics(adminClient, topicNames)
             .pipe(
-                tap(topics => {
+                tap((topics) => {
                     expect(topics.length).to.equal(0);
                 }),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     done(err);
                 },
                 complete: () => done(),
             });
     });
-    it(`returns an array containing only the topics that exist`, done => {
+    it(`returns an array containing only the topics that exist`, (done) => {
         const newTopicName = 'TestTopic' + Date.now().toString();
         const topicsToBeCreated: ITopicConfig[] = [
             {
@@ -258,12 +258,12 @@ describe(`existingTopics function`, () => {
         createTopics(adminClient, topicsToBeCreated)
             .pipe(
                 concatMap(() => existingTopics(adminClient, topicNames)),
-                tap(topics => {
+                tap((topics) => {
                     expect(topics.length).to.equal(topicsToBeCreated.length);
                 }),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     if (adminClient) {
                         adminClient.disconnect();
                     }
@@ -277,33 +277,33 @@ describe(`existingTopics function`, () => {
 
 describe(`nonExistingTopics function`, () => {
     const connectionData = { adminClient: null };
-    before(`create the admin client`, done => {
+    before(`create the admin client`, (done) => {
         _buildAdminClient('nonExistingTopics-test', done, connectionData);
     });
-    after(`disconnect the admin client`, done => {
+    after(`disconnect the admin client`, (done) => {
         _disconnectAdminClient(connectionData.adminClient, done);
     });
-    it(`returns an array with all the names passed as input since none of the topics actually exists`, done => {
+    it(`returns an array with all the names passed as input since none of the topics actually exists`, (done) => {
         const topicNames = ['nonexiastingtopic1', 'nonexiastingtopic1'];
         const adminClient = connectionData.adminClient;
         nonExistingTopics(adminClient, topicNames)
             .pipe(
-                tap(topics => {
+                tap((topics) => {
                     expect(topics.length).to.equal(topicNames.length);
-                    topicNames.forEach(tn => {
-                        expect(topics.find(t => t === tn)).to.be.not.undefined;
+                    topicNames.forEach((tn) => {
+                        expect(topics.find((t) => t === tn)).to.be.not.undefined;
                     });
                 }),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     done(err);
                 },
                 complete: () => done(),
             });
     });
-    it(`returns an array containing only the topics that do not exist`, done => {
+    it(`returns an array containing only the topics that do not exist`, (done) => {
         const newTopicName = 'TestTopic' + Date.now().toString();
         const topicsToBeCreated: ITopicConfig[] = [
             {
@@ -316,15 +316,15 @@ describe(`nonExistingTopics function`, () => {
         createTopics(adminClient, topicsToBeCreated)
             .pipe(
                 concatMap(() => nonExistingTopics(adminClient, topicNames)),
-                tap(topics => {
+                tap((topics) => {
                     expect(topics.length).to.equal(namesOfNonExistingTopics.length);
-                    namesOfNonExistingTopics.forEach(tn => {
-                        expect(topics.find(t => t === tn)).to.be.not.undefined;
+                    namesOfNonExistingTopics.forEach((tn) => {
+                        expect(topics.find((t) => t === tn)).to.be.not.undefined;
                     });
                 }),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     if (adminClient) {
                         adminClient.disconnect();
                     }
@@ -338,28 +338,28 @@ describe(`nonExistingTopics function`, () => {
 
 describe(`fetchTopicMetadata function`, () => {
     const connectionData: { adminClient: Admin } = { adminClient: null };
-    before(`create the admin client`, done => {
+    before(`create the admin client`, (done) => {
         _buildAdminClient('fetchTopicMetadata-test', done, connectionData);
     });
-    after(`disconnect the admin client`, done => {
+    after(`disconnect the admin client`, (done) => {
         _disconnectAdminClient(connectionData.adminClient, done);
     });
-    it(`returns an array of the metadata for the topic names passed as parameters`, done => {
+    it(`returns an array of the metadata for the topic names passed as parameters`, (done) => {
         const adminClient = connectionData.adminClient;
         const newTopicName_1 = 'TestTopic_1_' + Date.now().toString();
         const newTopicName_2 = 'TestTopic_2_' + Date.now().toString();
         const topicNames = [newTopicName_1, newTopicName_2];
-        const topicsToBeCreated: ITopicConfig[] = topicNames.map(tn => ({ topic: tn }));
+        const topicsToBeCreated: ITopicConfig[] = topicNames.map((tn) => ({ topic: tn }));
         createTopics(adminClient, topicsToBeCreated)
             .pipe(
                 concatMap(() => fetchTopicMetadata(adminClient, topicNames)),
-                tap(topicsMetadata => {
+                tap((topicsMetadata) => {
                     expect(topicsMetadata.topics.length).to.equal(topicsToBeCreated.length);
-                    topicsMetadata.topics.forEach(tMd => expect(topicNames.includes(tMd.name)).to.be.true);
+                    topicsMetadata.topics.forEach((tMd) => expect(topicNames.includes(tMd.name)).to.be.true);
                 }),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     if (adminClient) {
                         adminClient.disconnect();
                     }
@@ -369,16 +369,16 @@ describe(`fetchTopicMetadata function`, () => {
                 complete: () => done(),
             });
     });
-    it(`errors since none of the topic does not exist`, done => {
+    it(`errors since none of the topic does not exist`, (done) => {
         const topicNames = ['nonexiastingtopic_1', 'nonexiastingtopic_2'];
         const adminClient = connectionData.adminClient;
         (adminClient.logger() as any).setLogLevel(logLevel.NOTHING);
         fetchTopicMetadata(adminClient, topicNames).subscribe({
-            next: data => {
+            next: (data) => {
                 console.error('It should not pass here', data);
                 done('It should not next');
             },
-            error: err => {
+            error: (err) => {
                 expect(err).to.be.not.undefined;
                 expect(err.message).to.equal('This server does not host this topic-partition');
                 done();
@@ -389,22 +389,22 @@ describe(`fetchTopicMetadata function`, () => {
             },
         });
     });
-    it(`errors since at least one of the topic does not exist`, done => {
+    it(`errors since at least one of the topic does not exist`, (done) => {
         const adminClient = connectionData.adminClient;
         const newTopicName_1 = 'TestTopic_1_' + Date.now().toString();
         const newTopicName_2 = 'TestTopic_2_' + Date.now().toString();
         const topicNames = [newTopicName_1, newTopicName_2];
-        const topicsToBeCreated: ITopicConfig[] = topicNames.map(tn => ({ topic: tn }));
+        const topicsToBeCreated: ITopicConfig[] = topicNames.map((tn) => ({ topic: tn }));
         (adminClient.logger() as any).setLogLevel(logLevel.NOTHING);
 
         createTopics(adminClient, topicsToBeCreated)
             .pipe(concatMap(() => fetchTopicMetadata(adminClient, [...topicNames, 'nonexistingtopic'])))
             .subscribe({
-                next: data => {
+                next: (data) => {
                     console.error('It should not pass here', data);
                     done('It should not next');
                 },
-                error: err => {
+                error: (err) => {
                     expect(err).to.be.not.undefined;
                     expect(err.message).to.equal('This server does not host this topic-partition');
                     done();
@@ -419,13 +419,13 @@ describe(`fetchTopicMetadata function`, () => {
 
 describe(`deleteTopics function`, () => {
     const connectionData: { adminClient: Admin } = { adminClient: null };
-    before(`create the admin client`, done => {
+    before(`create the admin client`, (done) => {
         _buildAdminClient('deleteTopics-test', done, connectionData);
     });
-    after(`disconnect the admin client`, done => {
+    after(`disconnect the admin client`, (done) => {
         _disconnectAdminClient(connectionData.adminClient, done);
     });
-    it(`returns the name of the topic deleted`, done => {
+    it(`returns the name of the topic deleted`, (done) => {
         const adminClient = connectionData.adminClient;
         const topicName = 'TestTopicToDelete' + Date.now().toString();
         const topics: ITopicConfig[] = [
@@ -439,41 +439,41 @@ describe(`deleteTopics function`, () => {
                 concatMap(() =>
                     deleteTopics(
                         adminClient,
-                        topics.map(t => t.topic),
+                        topics.map((t) => t.topic),
                     ),
                 ),
-                tap(topicsDeleted => {
+                tap((topicsDeleted) => {
                     expect(topicsDeleted.length).to.equal(topics.length);
-                    expect(topicsDeleted.find(t => t === topics[0].topic)).to.equal(topicName);
+                    expect(topicsDeleted.find((t) => t === topics[0].topic)).to.equal(topicName);
                 }),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     done(err);
                 },
                 complete: () => done(),
             });
     });
-    it(`returns an empty array since the topic to be deleted does not exist`, done => {
+    it(`returns an empty array since the topic to be deleted does not exist`, (done) => {
         const adminClient = connectionData.adminClient;
         const topics = ['NonExistingTopicToDelete'];
 
         deleteTopics(adminClient, topics)
             .pipe(
-                tap(topicsDeleted => {
+                tap((topicsDeleted) => {
                     expect(topicsDeleted.length).to.equal(0);
                 }),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     done(err);
                 },
                 complete: () => done(),
             });
     });
-    it(`returns an array with just the names of the topics actually deleted`, done => {
+    it(`returns an array with just the names of the topics actually deleted`, (done) => {
         const adminClient = connectionData.adminClient;
         const topicName = 'TestTopicToDelete' + Date.now().toString();
         const topicsToDelete: ITopicConfig[] = [
@@ -481,26 +481,26 @@ describe(`deleteTopics function`, () => {
                 topic: topicName,
             },
         ];
-        const topics = [...topicsToDelete.map(t => t.topic), 'NonExistingTopic'];
+        const topics = [...topicsToDelete.map((t) => t.topic), 'NonExistingTopic'];
 
         // just some of the topics, i.e. the topics to delete, are created
         createTopics(adminClient, topicsToDelete)
             .pipe(
                 concatMap(() => deleteTopics(adminClient, topics)),
-                tap(topicsDeleted => {
+                tap((topicsDeleted) => {
                     expect(topicsDeleted.length).to.equal(topicsToDelete.length);
-                    expect(topicsDeleted.find(t => t === topicName)).to.be.not.undefined;
+                    expect(topicsDeleted.find((t) => t === topicName)).to.be.not.undefined;
                 }),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     done(err);
                 },
                 complete: () => done(),
             });
     });
-    it(`actually deletes a topic`, done => {
+    it(`actually deletes a topic`, (done) => {
         const adminClient = connectionData.adminClient;
         const topicName = 'TestTopicCreatedAndThenDeleted' + Date.now().toString();
         const topics: ITopicConfig[] = [
@@ -514,24 +514,24 @@ describe(`deleteTopics function`, () => {
             .pipe(
                 // first test that the topic exists
                 concatMap(() => fetchTopicMetadata(adminClient, [topicName])),
-                tap(topicsMetadata => {
+                tap((topicsMetadata) => {
                     expect(topicsMetadata.topics.length).to.equal(1);
                 }),
                 concatMap(() =>
                     deleteTopics(
                         adminClient,
-                        topics.map(t => t.topic),
+                        topics.map((t) => t.topic),
                     ),
                 ),
                 // then test that the topic does not exist - this raises an error
                 concatMap(() => fetchTopicMetadata(adminClient, [topicName])),
             )
             .subscribe({
-                next: data => {
+                next: (data) => {
                     console.error('It should not pass here', data);
                     done('It should not next');
                 },
-                error: err => {
+                error: (err) => {
                     expect(err).to.be.not.undefined;
                     expect(err.message).to.equal('This server does not host this topic-partition');
                     done();
@@ -545,22 +545,22 @@ describe(`deleteTopics function`, () => {
 });
 
 describe(`connectConsumer function`, () => {
-    it(`returns a Consumer connected to Kafka brokers`, done => {
+    it(`returns a Consumer connected to Kafka brokers`, (done) => {
         const kafkaConfig: KafkaConfig = {
             brokers: testConfiguration.brokers,
         };
 
         connectConsumer(kafkaConfig, testConfiguration.groupId)
             .pipe(
-                tap(consumer => {
+                tap((consumer) => {
                     expect(consumer).to.be.not.undefined;
                 }),
-                tap(consumer => {
+                tap((consumer) => {
                     consumer.disconnect();
                 }),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     done(err);
                 },
@@ -570,22 +570,22 @@ describe(`connectConsumer function`, () => {
 });
 
 describe(`connectProducer function`, () => {
-    it(`returns a Producer connected to Kafka brokers`, done => {
+    it(`returns a Producer connected to Kafka brokers`, (done) => {
         const kafkaConfig: KafkaConfig = {
             brokers: testConfiguration.brokers,
         };
 
         connectProducer(kafkaConfig)
             .pipe(
-                tap(producer => {
+                tap((producer) => {
                     expect(producer).to.be.not.undefined;
                 }),
-                tap(producer => {
+                tap((producer) => {
                     producer.disconnect();
                 }),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     done(err);
                 },
@@ -599,7 +599,7 @@ describe(`when a Producer sends a record to a Topic`, () => {
     let newTopicName: string;
     let producer: Producer;
     let consumer: Consumer;
-    before(`create the Topic, the Producer and the Consumer`, done => {
+    before(`create the Topic, the Producer and the Consumer`, (done) => {
         const clientId = 'ProducerSendMsg';
         const kafkaConfig: KafkaConfig = {
             clientId,
@@ -609,7 +609,7 @@ describe(`when a Producer sends a record to a Topic`, () => {
                 retries: 3,
             },
         };
-        newTopicName = testConfiguration.topicName + '_ProducerFirst_'  + Date.now().toString();
+        newTopicName = testConfiguration.topicName + '_ProducerFirst_' + Date.now().toString();
         const topics: ITopicConfig[] = [
             {
                 topic: newTopicName,
@@ -617,17 +617,17 @@ describe(`when a Producer sends a record to a Topic`, () => {
         ];
         connectAdminClient(kafkaConfig)
             .pipe(
-                tap(_adminClient => (adminClient = _adminClient)),
+                tap((_adminClient) => (adminClient = _adminClient)),
                 concatMap(() => createTopics(adminClient, topics)),
                 tap(() => adminClient.disconnect()),
                 concatMap(() => connectProducer(kafkaConfig)),
-                tap(_producer => (producer = _producer)),
+                tap((_producer) => (producer = _producer)),
                 concatMap(() => connectConsumer(kafkaConfig, testConfiguration.groupId)),
-                tap(_consumer => (consumer = _consumer)),
+                tap((_consumer) => (consumer = _consumer)),
                 tap(() => done()),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     if (adminClient) {
                         adminClient.disconnect();
                     }
@@ -639,16 +639,16 @@ describe(`when a Producer sends a record to a Topic`, () => {
                 },
             });
     });
-    after(`disconnects the Producer and the Consumer`, done => {
+    after(`disconnects the Producer and the Consumer`, (done) => {
         producer
             .disconnect()
             .then(() => consumer.disconnect())
             .then(
                 () => done(),
-                err => done(err),
+                (err) => done(err),
             );
     });
-    it(`a Consumer reads the record even if it subscribes to the topic AFTER the record has been sent`, done => {
+    it(`a Consumer reads the record even if it subscribes to the topic AFTER the record has been sent`, (done) => {
         const messageValue = 'The value of message Producer first ' + Date.now().toString();
         const messages: Message[] = [
             {
@@ -665,11 +665,11 @@ describe(`when a Producer sends a record to a Topic`, () => {
                 // Then subscribe the Consumer to the topic
                 concatMap(() => subscribeConsumerToTopic(consumer, newTopicName)),
                 concatMap(() => consumerMessages(consumer)),
-                tap(msg => expect(msg.kafkaMessage.value.toString()).to.equal(messageValue)),
+                tap((msg) => expect(msg.kafkaMessage.value.toString()).to.equal(messageValue)),
                 take(1), // to complete the Observable
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     producer.disconnect();
                     consumer.disconnect();
@@ -689,7 +689,7 @@ describe(`when a Consumer subscribes to a Topic`, () => {
     let newTopicName: string;
     let producer: Producer;
     let consumer: Consumer;
-    before(`create the Topic, the Producer and the Consumer`, done => {
+    before(`create the Topic, the Producer and the Consumer`, (done) => {
         const clientId = 'ConsumerReadMsg';
         const kafkaConfig: KafkaConfig = {
             clientId,
@@ -707,17 +707,17 @@ describe(`when a Consumer subscribes to a Topic`, () => {
         ];
         connectAdminClient(kafkaConfig)
             .pipe(
-                tap(_adminClient => (adminClient = _adminClient)),
+                tap((_adminClient) => (adminClient = _adminClient)),
                 concatMap(() => createTopics(adminClient, topics)),
                 tap(() => adminClient.disconnect()),
                 concatMap(() => connectProducer(kafkaConfig)),
-                tap(_producer => (producer = _producer)),
+                tap((_producer) => (producer = _producer)),
                 concatMap(() => connectConsumer(kafkaConfig, testConfiguration.groupId)),
-                tap(_consumer => (consumer = _consumer)),
+                tap((_consumer) => (consumer = _consumer)),
                 tap(() => done()),
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     if (adminClient) {
                         adminClient.disconnect();
                     }
@@ -729,16 +729,16 @@ describe(`when a Consumer subscribes to a Topic`, () => {
                 },
             });
     });
-    after(`disconnects the Producer and the Consumer`, done => {
+    after(`disconnects the Producer and the Consumer`, (done) => {
         producer
             .disconnect()
             .then(() => consumer.disconnect())
             .then(
                 () => done(),
-                err => done(err),
+                (err) => done(err),
             );
     });
-    it(`a Producer can send a record to the topic and the Consumer reads it`, done => {
+    it(`a Producer can send a record to the topic and the Consumer reads it`, (done) => {
         const messageValue = 'The value of message Consumer first ' + Date.now().toString();
         const messages: Message[] = [
             {
@@ -755,11 +755,11 @@ describe(`when a Consumer subscribes to a Topic`, () => {
                 // Then the Producer sends a record, while the Consumer is ALREADY subscribed
                 concatMap(() => sendRecord(producer, producerRecord)),
                 concatMap(() => consumerMessages(consumer)),
-                tap(msg => expect(msg.kafkaMessage.value.toString()).to.equal(messageValue)),
+                tap((msg) => expect(msg.kafkaMessage.value.toString()).to.equal(messageValue)),
                 take(1), // to complete the Observable
             )
             .subscribe({
-                error: err => {
+                error: (err) => {
                     console.error('ERROR', err);
                     producer.disconnect();
                     consumer.disconnect();

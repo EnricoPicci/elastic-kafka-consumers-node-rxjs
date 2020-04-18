@@ -583,15 +583,15 @@ describe(`when concurrency is INCREASED after a DoConsumer has started consuming
             .consume()
             .pipe(
                 take(messagesConcurrency_1.length + messagesConcurrency_N.length), // to complete the Observable
-                tap(message => {
+                tap((message) => {
                     if (!messageDictionarySize.includes(currentConcurrency)) {
-                        console.log(messageDictionarySize)
+                        console.log(messageDictionarySize);
                     }
                     expect(messageDictionarySize.includes(currentConcurrency)).to.be.true;
 
                     messageDictionarySize.forEach((size) => {
                         if (size > currentConcurrency) {
-                            console.log(message)
+                            console.log(message);
                         }
                         expect(size).to.be.lte(currentConcurrency);
                     });
@@ -605,8 +605,8 @@ describe(`when concurrency is INCREASED after a DoConsumer has started consuming
                     done(err);
                 },
                 complete: () => {
-                    expect(sendRecordsSubscriptions.length).to.equal(2)
-                    sendRecordsSubscriptions.forEach(s => s.unsubscribe())
+                    expect(sendRecordsSubscriptions.length).to.equal(2);
+                    sendRecordsSubscriptions.forEach((s) => s.unsubscribe());
                     producer.disconnect();
                     doConsumer.disconnect();
                     done();
@@ -668,12 +668,12 @@ describe(`when concurrency is DECREASED after a DoConsumer has started consuming
         const messageValuesConcurrency_1 = new Array(numberOfMessages)
             .fill(null)
             .map((_, i) => `Message_${i}_concurrency_1_value for a DoConsumer`);
-            const messageValuesConcurrency_N = new Array(numberOfMessages)
-                .fill(null)
-                .map((_, i) => `Message_${i}_concurrency_N_value for a DoConsumer`);
-            const messagesConcurrency_N = messageValuesConcurrency_N.map((value) => ({
-                value,
-            }));
+        const messageValuesConcurrency_N = new Array(numberOfMessages)
+            .fill(null)
+            .map((_, i) => `Message_${i}_concurrency_N_value for a DoConsumer`);
+        const messagesConcurrency_N = messageValuesConcurrency_N.map((value) => ({
+            value,
+        }));
         const messagesConcurrency_1 = messageValuesConcurrency_1.map((value) => ({
             value,
         }));
@@ -687,7 +687,7 @@ describe(`when concurrency is DECREASED after a DoConsumer has started consuming
         };
         // Create the DoConsumer starting with a certain concurrency
         let currentConcurrency = 4;
-        const consumerGroup = 'DoConsumer_Test_ProcessMessagesWithDecreasingConcurrency'
+        const consumerGroup = 'DoConsumer_Test_ProcessMessagesWithDecreasingConcurrency';
         const doConsumer = new DoConsumer(
             'My Test Do Consumer Processing Messages with decreasing concurrency',
             0,
@@ -746,18 +746,15 @@ describe(`when concurrency is DECREASED after a DoConsumer has started consuming
             .consume()
             .pipe(
                 take(messagesConcurrency_N.length + messagesConcurrency_1.length), // to complete the Observable
-                tap(message => {
+                tap((message) => {
                     if (!messageDictionarySize.includes(currentConcurrency)) {
-                        console.log(messageDictionarySize)
-                    }
-                    if(!messageDictionarySize.includes(currentConcurrency)) {
-                        console.log(messageDictionarySize)
+                        console.log(messageDictionarySize);
                     }
                     expect(messageDictionarySize.includes(currentConcurrency)).to.be.true;
 
                     messageDictionarySize.forEach((size) => {
                         if (size > currentConcurrency) {
-                            console.log(message)
+                            console.log(message);
                         }
                         expect(size).to.be.lte(currentConcurrency);
                     });
@@ -771,8 +768,8 @@ describe(`when concurrency is DECREASED after a DoConsumer has started consuming
                     done(err);
                 },
                 complete: () => {
-                    expect(sendRecordsSubscriptions.length).to.equal(2)
-                    sendRecordsSubscriptions.forEach(s => s.unsubscribe())
+                    expect(sendRecordsSubscriptions.length).to.equal(2);
+                    sendRecordsSubscriptions.forEach((s) => s.unsubscribe());
                     producer.disconnect();
                     doConsumer.disconnect();
                     done();
