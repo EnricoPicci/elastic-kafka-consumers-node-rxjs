@@ -10,7 +10,7 @@ export type TopicConfig = {
     name: string;
     partitions: number;
 };
-export type DoConsumerConfig = {
+export type DoerConfig = {
     name: string;
     inputTopic: string;
     outputTopics?: string[];

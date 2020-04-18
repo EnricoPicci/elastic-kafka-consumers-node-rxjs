@@ -15,9 +15,10 @@ import {
     connectProducer,
     sendRecord,
 } from '../observable-kafkajs/observable-kafkajs';
-import { concatMap, tap, mergeMap, switchMap, map, share } from 'rxjs/operators';
+import { concatMap, tap, mergeMap, switchMap, map, takeUntil, finalize } from 'rxjs/operators';
 import { Observable, BehaviorSubject, Subscription, of, Subject, forkJoin } from 'rxjs';
 import { cpuUsageStream } from './cpu-usage';
+import { newMessageRecord } from './messages';
 
 export type doerFuntion = (message: KafkaMessage) => Observable<any>;
 
@@ -28,6 +29,8 @@ export class Doer {
     public groupIdJoined = new Subject<string>();
     private removeGroupIdJoinedListener: RemoveInstrumentationEventListener<string>;
     private producer: Producer;
+    private msgToOrchTopic: string;
+    private disconnected = new Subject<void>();
 
     constructor(
         protected name: string,
@@ -39,7 +42,9 @@ export class Doer {
         private _concurrency = 1,
         private _cpuUsageCheckFrequency = 2000,
         private _cpuUsageThreshold = 60,
-    ) {}
+    ) {
+        this.msgToOrchTopic = `${this.name}_${this.id}_2_Orch`;
+    }
 
     do: doerFuntion = (message: KafkaMessage) => {
         throw new Error(`No function specified for Doer ${this.name} - Message received ${message}`);
@@ -47,9 +52,24 @@ export class Doer {
 
     start() {
         console.log(`Elastic Doer ${this.name} (id: ${this.id}) starts`);
-        const processChain = this.outputTopics.length > 0 ? this.consumeProduce : this.consume;
-        processChain
-            .bind(this)()
+        const processChain: (concurrencyAdjustment?: boolean) => Observable<any> = (this.outputTopics.length > 0
+            ? this.consumeProduce
+            : this.consume
+        ).bind(this);
+
+        const kafkaConfig = this.kafkaConfig();
+        connectProducer(kafkaConfig)
+            .pipe(
+                tap((producer) => (this.producer = producer)),
+                concatMap(() => sendRecord(this.producer, newMessageRecord('Started', this.msgToOrchTopic))),
+                concatMap(() => processChain()),
+                takeUntil(
+                    this.disconnected.pipe(
+                        concatMap(() => sendRecord(this.producer, newMessageRecord('Stopped', this.msgToOrchTopic))),
+                        tap(() => this._disconnect()),
+                    ),
+                ),
+            )
             .subscribe({
                 error: (err) => {
                     console.error(err);
@@ -84,10 +104,7 @@ export class Doer {
         );
     }
     consumeProduce(concurrencyAdjustment = false) {
-        const kafkaConfig = this.kafkaConfig();
-        return connectProducer(kafkaConfig).pipe(
-            tap((producer) => (this.producer = producer)),
-            concatMap(() => this.consume(concurrencyAdjustment)),
+        return this.consume(concurrencyAdjustment).pipe(
             map((result) => {
                 const messages: Message[] = [
                     {
@@ -119,11 +136,13 @@ export class Doer {
     }
 
     disconnect() {
+        this.disconnected.next();
+    }
+    _disconnect() {
+        this.disconnected.next();
         this.cpuUsageStreamSubscription?.unsubscribe();
         this.removeGroupIdJoinedListener();
-        if (this.producer) {
-            this.producer.disconnect();
-        }
+        this.producer.disconnect();
         return this.consumer.disconnect();
     }
 

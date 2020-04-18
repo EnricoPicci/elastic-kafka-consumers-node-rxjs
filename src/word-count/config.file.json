@@ -4,7 +4,7 @@
         { "name": "files", "partitions": 4 },
         { "name": "uris", "partitions": 4 }
     ],
-    "doConsumers": [
+    "doers": [
         {
             "name": "count_words_files",
             "inputTopic": "files",

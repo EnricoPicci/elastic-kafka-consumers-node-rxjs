@@ -5,8 +5,8 @@ import { Doer, doerFuntion } from './doer';
 import { testConfiguration } from '../observable-kafkajs/test-config';
 import { KafkaConfig, Producer, ProducerRecord, KafkaMessage } from 'kafkajs';
 import { connectProducer } from '../observable-kafkajs/observable-kafkajs';
-import { concatMap, tap, take } from 'rxjs/operators';
-import { of, Subject, Subscription } from 'rxjs';
+import { concatMap, tap, take, toArray } from 'rxjs/operators';
+import { of, Subject } from 'rxjs';
 
 function kafkaConfig(clientId: string): KafkaConfig {
     return {
@@ -33,7 +33,7 @@ describe(`When a message is sent to a topic which is the input topic of a Doer`,
         return producer.disconnect().then(() => doer.disconnect());
     }
     it(`the message is read and processed by the do function`, (done) => {
-        const doerName = 'ConsumerDoer';
+        const doerName = 'ConsumerDoer_' + Date.now().toString();
         const doerInputTopic = doerName + '_Topic' + Date.now().toString();
         doer = new Doer(doerName, 0, testConfiguration.brokers, doerInputTopic, doerName + '_ConsumerGroup');
         const emitter = new Subject<string>();
@@ -72,7 +72,7 @@ describe(`When a message is sent to a topic which is the input topic of a Doer`,
     }).timeout(10000);
 });
 
-describe.only(`When a Doer has an output topic which is the input topic of another Doer`, () => {
+describe(`When a Doer has an output topic which is the input topic of another Doer`, () => {
     let producer: Producer;
     let firstDoer: Doer;
     let secondDoer: Doer;
@@ -90,10 +90,10 @@ describe.only(`When a Doer has an output topic which is the input topic of anoth
             return of(transformMessage(message.value.toString()));
         };
     }
-    it(`the result of the first Doer processing is sent to the second Doer`, (done) => {
-        const firstDoerName = 'ConsumerProducerFirstDoer';
+    it(`the results of the first Doer processing are sent to the second Doer`, (done) => {
+        const firstDoerName = 'ConsumerProducerFirstDoer_' + Date.now().toString();
         const firstDoerInputTopic = firstDoerName + '_Input_Topic' + Date.now().toString();
-        const secondDoerName = 'ConsumerSecondDoer';
+        const secondDoerName = 'ConsumerSecondDoer_' + Date.now().toString();
         const secondDoerInputTopic = secondDoerName + '_Input_Topic' + Date.now().toString();
         const firstDoerOutputTopics = [secondDoerInputTopic];
         firstDoer = new Doer(
@@ -118,13 +118,11 @@ describe.only(`When a Doer has an output topic which is the input topic of anoth
         secondDoer.do = emitFactory(emitter);
         secondDoer.start();
 
-        const producerMessage = 'a message';
+        const producerMessages = ['message_1', 'message_2'];
         const producerRecord: ProducerRecord = {
-            messages: [
-                {
-                    value: producerMessage,
-                },
-            ],
+            messages: producerMessages.map((m) => ({
+                value: m,
+            })),
             topic: firstDoerInputTopic,
         };
         connectProducer(kafkaConfig(firstDoerName))
@@ -132,8 +130,12 @@ describe.only(`When a Doer has an output topic which is the input topic of anoth
                 tap((_producer) => (producer = _producer)),
                 concatMap(() => producer.send(producerRecord)),
                 concatMap(() => emitter),
-                take(1),
-                tap((val) => expect(val).to.equal(transformMessage(producerMessage))),
+                take(producerMessages.length),
+                toArray(),
+                tap((receivedMessages) => {
+                    expect(receivedMessages.length).to.equal(producerMessages.length);
+                    producerMessages.forEach((m) => expect(receivedMessages.includes(transformMessage(m))).to.be.true);
+                }),
             )
             .subscribe({
                 error: (e) => {
