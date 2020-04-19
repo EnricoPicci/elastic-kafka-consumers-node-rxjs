@@ -12,24 +12,43 @@ import {
     connectConsumer,
     subscribeConsumerToTopic,
     consumerMessages,
-    connectProducer,
     sendRecord,
+    connectProducer,
 } from '../observable-kafkajs/observable-kafkajs';
-import { concatMap, tap, mergeMap, switchMap, map, takeUntil, finalize } from 'rxjs/operators';
+import { concatMap, tap, mergeMap, switchMap, map, takeUntil } from 'rxjs/operators';
 import { Observable, BehaviorSubject, Subscription, of, Subject, forkJoin } from 'rxjs';
 import { cpuUsageStream } from './cpu-usage';
 import { newMessageRecord } from './messages';
+import { parseCommand } from './commands';
 
 export type doerFuntion = (message: KafkaMessage) => Observable<any>;
 
+export const MESSAGES_FROM_ORCHESTRATOR_TOPIC_PREFIX = 'Orch_Msg_';
+export function messagesFromOrchestratorTopicNamePrefix(doerName: string) {
+    return `${MESSAGES_FROM_ORCHESTRATOR_TOPIC_PREFIX}${doerName}_`;
+}
+export function messagesToOrchestratorTopicName(doerName: string, doerId: number) {
+    return `${messagesFromOrchestratorTopicNamePrefix(doerName)}${doerName}_${doerId}`;
+}
+
+export const COMMANDS_TO_ORCHESTRATOR_TOPIC_PREFIX = 'Orch_Cmd_';
+export function commandsToOrchestratorTopicNamePrefix(doerName: string) {
+    return `${COMMANDS_TO_ORCHESTRATOR_TOPIC_PREFIX}${doerName}_`;
+}
+export function commandsFromOrchestratorTopicName(doerName: string, doerId: number) {
+    return `${commandsToOrchestratorTopicNamePrefix(doerName)}${doerName}_${doerId}`;
+}
+
 export class Doer {
-    protected consumer: Consumer;
+    private messageConsumer: Consumer;
+    private orchestratorCommandsConsumer: Consumer;
     private _changeConcurrency = new BehaviorSubject<number>(this._concurrency);
     private cpuUsageStreamSubscription: Subscription;
     public groupIdJoined = new Subject<string>();
     private removeGroupIdJoinedListener: RemoveInstrumentationEventListener<string>;
     private producer: Producer;
-    private msgToOrchTopic: string;
+    private messagesToOrchestratorTopic: string;
+    private commandsFromOrchestratorTopic: string;
     private disconnected = new Subject<void>();
 
     constructor(
@@ -43,7 +62,8 @@ export class Doer {
         private _cpuUsageCheckFrequency = 2000,
         private _cpuUsageThreshold = 60,
     ) {
-        this.msgToOrchTopic = `${this.name}_${this.id}_2_Orch`;
+        this.messagesToOrchestratorTopic = messagesToOrchestratorTopicName(this.name, this.id);
+        this.commandsFromOrchestratorTopic = commandsFromOrchestratorTopicName(this.name, this.id);
     }
 
     do: doerFuntion = (message: KafkaMessage) => {
@@ -52,32 +72,61 @@ export class Doer {
 
     start() {
         console.log(`Elastic Doer ${this.name} (id: ${this.id}) starts`);
-        const processChain: (concurrencyAdjustment?: boolean) => Observable<any> = (this.outputTopics.length > 0
-            ? this.consumeProduce
-            : this.consume
-        ).bind(this);
 
-        const kafkaConfig = this.kafkaConfig();
-        connectProducer(kafkaConfig)
+        forkJoin(this.processMessages(), this.processOrchestratorCommands())
             .pipe(
-                tap((producer) => (this.producer = producer)),
-                concatMap(() => sendRecord(this.producer, newMessageRecord('Started', this.msgToOrchTopic))),
-                concatMap(() => processChain()),
                 takeUntil(
                     this.disconnected.pipe(
-                        concatMap(() => sendRecord(this.producer, newMessageRecord('Stopped', this.msgToOrchTopic))),
-                        tap(() => this._disconnect()),
+                        concatMap(() => this._disconnect()),
+                        concatMap(() =>
+                            sendRecord(this.producer, newMessageRecord('Stop', this.messagesToOrchestratorTopic)),
+                        ),
                     ),
                 ),
             )
             .subscribe({
                 error: (err) => {
-                    console.error(err);
+                    console.error('!!!!!!!!! Processing Error', err);
+                    this._disconnect();
                 },
                 complete: () => {
                     console.log(`Elastic Doer ${this.name} (id: ${this.id}) completed`);
                 },
             });
+    }
+    private processMessages() {
+        // determines whether the processing is for either a pure Consumer or a ConsumerProducer
+        const processChain: (concurrencyAdjustment?: boolean) => Observable<any> = (this.outputTopics.length > 0
+            ? this.consumeProduce
+            : this.consume
+        ).bind(this);
+
+        // connects the Producer of this Doer and starts the processing
+        return connectProducer(this.kafkaConfig()).pipe(
+            tap((producer) => (this.producer = producer)),
+            concatMap(() => sendRecord(this.producer, newMessageRecord('Start', this.messagesToOrchestratorTopic))),
+            concatMap(() => processChain()),
+        );
+    }
+    private processOrchestratorCommands() {
+        // connects the Consumer of this Doer to enable receiving commands from Orchestrator
+        return connectConsumer(this.kafkaConfig(), `${this.name}_${this.id}_Orch_Commands`).pipe(
+            tap((consumer) => (this.orchestratorCommandsConsumer = consumer)),
+            concatMap(() =>
+                subscribeConsumerToTopic(this.orchestratorCommandsConsumer, this.commandsFromOrchestratorTopic),
+            ),
+            concatMap(() => consumerMessages(this.orchestratorCommandsConsumer)),
+            map((commandMessage) => parseCommand(commandMessage.kafkaMessage.value.toString())),
+            tap((command) => {
+                switch (command.commandId) {
+                    case 'END':
+                        this.disconnect();
+                        break;
+                    default:
+                        console.error(`Command id ${command.commandId} not supported`);
+                }
+            }),
+        );
     }
 
     consume(concurrencyAdjustment = false) {
@@ -85,18 +134,21 @@ export class Doer {
             this.startAutomaticConcurrencyAdjustment();
         }
         return connectConsumer(this.kafkaConfig(), this.consumerGroup).pipe(
-            tap((consumer) => (this.consumer = consumer)),
+            tap((consumer) => (this.messageConsumer = consumer)),
             tap(() => {
-                this.removeGroupIdJoinedListener = this.consumer.on(this.consumer.events.GROUP_JOIN, (e) => {
-                    console.log(`Consumer joined Group Id at ${JSON.stringify(e)}`);
-                    this.groupIdJoined.next();
-                });
+                this.removeGroupIdJoinedListener = this.messageConsumer.on(
+                    this.messageConsumer.events.GROUP_JOIN,
+                    (e) => {
+                        console.log(`Consumer joined Group Id at ${JSON.stringify(e)}`);
+                        this.groupIdJoined.next();
+                    },
+                );
             }),
-            concatMap(() => subscribeConsumerToTopic(this.consumer, this.inputTopic)),
+            concatMap(() => subscribeConsumerToTopic(this.messageConsumer, this.inputTopic)),
             concatMap(() => this._changeConcurrency),
             tap(() => console.log('!!!!!!!!! concurrency is ', this._concurrency)),
             switchMap(() =>
-                consumerMessages(this.consumer).pipe(
+                consumerMessages(this.messageConsumer).pipe(
                     mergeMap((message) => this.do(message.kafkaMessage), this._concurrency),
                 ),
             ),
@@ -138,12 +190,13 @@ export class Doer {
     disconnect() {
         this.disconnected.next();
     }
-    _disconnect() {
-        this.disconnected.next();
+    private _disconnect() {
+        // this.disconnected.next();
         this.cpuUsageStreamSubscription?.unsubscribe();
         this.removeGroupIdJoinedListener();
         this.producer.disconnect();
-        return this.consumer.disconnect();
+        this.orchestratorCommandsConsumer.disconnect();
+        return this.messageConsumer.disconnect();
     }
 
     get concurrency() {

@@ -8,10 +8,10 @@ export function startDoer(
     consumerGroup: string,
     _concurrency: number,
     outputTopics: string[],
-    _cpuUsageCheckFrequency: number,
-    _cpuUsageThreshold: number,
     _function: string,
     _functionModule: string,
+    _cpuUsageCheckFrequency?: number,
+    _cpuUsageThreshold?: number,
 ) {
     const doer = new Doer(
         name,

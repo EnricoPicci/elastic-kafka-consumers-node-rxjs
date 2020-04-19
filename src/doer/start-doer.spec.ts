@@ -17,8 +17,6 @@ describe(`When startDoer function is fired`, () => {
             'consumerGroup',
             1,
             ['outputTopic'],
-            null,
-            null,
             'doNothing',
             './test-functions',
         ).then((_doer) => {

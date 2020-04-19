@@ -1,0 +1,30 @@
+{
+    "topics": [
+        { "name": "topic_1", "partitions": 4 },
+        { "name": "topic_2", "partitions": 4 }
+    ],
+    "doers": [
+        {
+            "name": "doer_1",
+            "inputTopic": "input_topic_1",
+            "outputTopics": ["output_topic_1"],
+            "function": "doNothing",
+            "functionModule": "./test-functions"
+        },
+        {
+            "name": "doer_2",
+            "inputTopic": "input_topic_2",
+            "outputTopics": ["output_topic_2"],
+            "function": "doNothing",
+            "functionModule": "./test-functions",
+            "concurrency": 1
+        },
+        {
+            "name": "fail_doer",
+            "inputTopic": "input_topic_fail_doer",
+            "function": "failFast",
+            "functionModule": "./test-functions",
+            "concurrency": 1
+        }
+    ]
+}

@@ -3,8 +3,8 @@ import { map } from 'rxjs/operators';
 import { readLinesObs } from 'observable-fs';
 
 export type Config = {
-    brokers: string[];
     topics: TopicConfig[];
+    doers: DoerConfig[];
 };
 export type TopicConfig = {
     name: string;

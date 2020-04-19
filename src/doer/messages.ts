@@ -1,6 +1,6 @@
 import { ProducerRecord, Message } from 'kafkajs';
 
-export type MessageId = 'Started' | 'Stopped';
+export type MessageId = 'Start' | 'Stop' | 'Error';
 
 export type MessageRecord = {
     message: [];
