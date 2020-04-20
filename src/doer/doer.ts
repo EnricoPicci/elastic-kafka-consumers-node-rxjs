@@ -23,20 +23,14 @@ import { parseCommand } from './commands';
 
 export type doerFuntion = (message: KafkaMessage) => Observable<any>;
 
-export const MESSAGES_FROM_ORCHESTRATOR_TOPIC_PREFIX = 'Orch_Msg_';
-export function messagesFromOrchestratorTopicNamePrefix(doerName: string) {
-    return `${MESSAGES_FROM_ORCHESTRATOR_TOPIC_PREFIX}${doerName}_`;
-}
+export const MESSAGES_TO_ORCHESTRATOR_TOPIC_PREFIX = 'Orch_Msg_';
 export function messagesToOrchestratorTopicName(doerName: string, doerId: number) {
-    return `${messagesFromOrchestratorTopicNamePrefix(doerName)}${doerName}_${doerId}`;
+    return `${MESSAGES_TO_ORCHESTRATOR_TOPIC_PREFIX}${doerName}__${doerId}`;
 }
 
-export const COMMANDS_TO_ORCHESTRATOR_TOPIC_PREFIX = 'Orch_Cmd_';
-export function commandsToOrchestratorTopicNamePrefix(doerName: string) {
-    return `${COMMANDS_TO_ORCHESTRATOR_TOPIC_PREFIX}${doerName}_`;
-}
+export const COMMANDS_FROM_ORCHESTRATOR_TOPIC_PREFIX = 'Orch_Cmd_';
 export function commandsFromOrchestratorTopicName(doerName: string, doerId: number) {
-    return `${commandsToOrchestratorTopicNamePrefix(doerName)}${doerName}_${doerId}`;
+    return `${COMMANDS_FROM_ORCHESTRATOR_TOPIC_PREFIX}${doerName}__${doerId}`;
 }
 
 export class Doer {

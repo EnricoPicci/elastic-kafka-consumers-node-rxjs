@@ -1,7 +1,7 @@
 import { join } from 'path';
 import { readConfigFromFile, Config, DoerConfig } from './configuration/config';
-import { tap, concatMap, map, take } from 'rxjs/operators';
-import { from, of, Subject } from 'rxjs';
+import { tap, concatMap, map, take, mergeMap } from 'rxjs/operators';
+import { from, of, Subject, forkJoin } from 'rxjs';
 import { KafkaConfig, Admin, Consumer, Producer, ProducerRecord, Message } from 'kafkajs';
 import {
     connectAdminClient,
@@ -11,8 +11,15 @@ import {
     connectProducer,
     connectConsumer,
     consumerMessages,
+    subscribeConsumerToTopic,
+    ConsumerMessage,
 } from '../observable-kafkajs/observable-kafkajs';
-import { MESSAGES_FROM_ORCHESTRATOR_TOPIC_PREFIX, commandsFromOrchestratorTopicName } from '../doer/doer';
+import {
+    MESSAGES_TO_ORCHESTRATOR_TOPIC_PREFIX,
+    commandsFromOrchestratorTopicName,
+    COMMANDS_FROM_ORCHESTRATOR_TOPIC_PREFIX,
+    messagesToOrchestratorTopicName,
+} from '../doer/doer';
 import { spawn } from 'child_process';
 import { Command } from '../doer/commands';
 
@@ -35,6 +42,8 @@ export class Orchestrator {
     doers: { [doerId: string]: DoerInfo[] } = {};
     private _doerInfo$ = new Subject<DoerInfo>();
     doerInfo$ = this._doerInfo$.asObservable();
+    private _doerMessage$ = new Subject<ConsumerMessage>();
+    doerMessage$ = this._doerMessage$.asObservable();
 
     start(configFile: string, broker: string, doerToLaunch?: string) {
         this.broker = broker;
@@ -53,16 +62,20 @@ export class Orchestrator {
                 tap((producer) => (this.commandProducer = producer)),
                 concatMap(() => connectConsumer(this.kafkaConfig, 'Orchestrator')),
                 tap((consumer) => (this.doerMessageConsumer = consumer)),
-                // launch the producers found in the configuration
+                // launch the Doers found in the configuration
                 concatMap(() => readConfigFromFile(filePath)),
                 tap((_config) => (this.config = _config)),
                 concatMap(() => this.deleteOrchestratorMessageTopics()),
                 concatMap(() => {
-                    return doerToLaunch
-                        ? of(this.config.doers.find((d) => d.name === doerToLaunch))
-                        : from(this.config.doers);
+                    const _doers = doerToLaunch
+                        ? [this.config.doers.find((d) => d.name === doerToLaunch)]
+                        : this.config.doers;
+                    if (_doers.length === 0) {
+                        throw new Error(`No Doer with name ${doerToLaunch} is configured in ${filePath}`);
+                    }
+                    return forkJoin(_doers.map((d) => this.launchDoer(d)));
                 }),
-                tap((_doer) => this.launchDoer(_doer)),
+                concatMap(() => this.processMessagesFromDoers()),
             )
             .subscribe();
     }
@@ -71,11 +84,14 @@ export class Orchestrator {
             tap((client) => (this.adminClient = client)),
             concatMap(() => fetchTopicMetadata(this.adminClient)),
             map((topicsMetadata) => {
-                const orchestratorMessageTopicPrefixLength = MESSAGES_FROM_ORCHESTRATOR_TOPIC_PREFIX.length;
+                const orchestratorMessageTopicPrefixLength = MESSAGES_TO_ORCHESTRATOR_TOPIC_PREFIX.length;
+                const orchestratorCommandTopicPrefixLength = COMMANDS_FROM_ORCHESTRATOR_TOPIC_PREFIX.length;
                 return topicsMetadata.topics.filter(
                     (t) =>
                         t.name.substr(0, orchestratorMessageTopicPrefixLength) ===
-                        MESSAGES_FROM_ORCHESTRATOR_TOPIC_PREFIX,
+                            MESSAGES_TO_ORCHESTRATOR_TOPIC_PREFIX ||
+                        t.name.substr(0, orchestratorCommandTopicPrefixLength) ===
+                            COMMANDS_FROM_ORCHESTRATOR_TOPIC_PREFIX,
                 );
             }),
             concatMap((_topics) => {
@@ -95,8 +111,8 @@ export class Orchestrator {
         this.doers[doer.name].push(newDoerInfo);
 
         this.launchDoerAsChildProcess(doer, doerId);
+        return subscribeConsumerToTopic(this.doerMessageConsumer, messagesToOrchestratorTopicName(doer.name, doerId));
     }
-
     private launchDoerAsChildProcess(doer: DoerConfig, doerId: number) {
         if (process.platform === 'win32') {
             throw new Error('Start command from windows to be implemented');
@@ -140,6 +156,15 @@ export class Orchestrator {
 
         this._doerInfo$.next(doerInfo);
         console.log(`Doer ${doer.name} (id: ${doerId}) launched`);
+    }
+
+    private processMessagesFromDoers() {
+        return consumerMessages(this.doerMessageConsumer).pipe(
+            tap((message) => {
+                console.log('^^^^^^^^^^^^^^^^^^^^^^', message.topic, message.kafkaMessage.value.toString());
+                this._doerMessage$.next(message);
+            }),
+        );
     }
 
     disconnect() {
