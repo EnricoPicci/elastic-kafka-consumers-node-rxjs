@@ -1,11 +1,20 @@
 import { join } from 'path';
 import { readConfigFromFile, Config, DoerConfig } from './configuration/config';
-import { tap, concatMap, map } from 'rxjs/operators';
+import { tap, concatMap, map, take } from 'rxjs/operators';
 import { from, of, Subject } from 'rxjs';
-import { KafkaConfig, Admin } from 'kafkajs';
-import { connectAdminClient, deleteTopics, fetchTopicMetadata } from '../observable-kafkajs/observable-kafkajs';
-import { MESSAGES_FROM_ORCHESTRATOR_TOPIC_PREFIX } from '../doer/doer';
+import { KafkaConfig, Admin, Consumer, Producer, ProducerRecord, Message } from 'kafkajs';
+import {
+    connectAdminClient,
+    deleteTopics,
+    fetchTopicMetadata,
+    sendRecord,
+    connectProducer,
+    connectConsumer,
+    consumerMessages,
+} from '../observable-kafkajs/observable-kafkajs';
+import { MESSAGES_FROM_ORCHESTRATOR_TOPIC_PREFIX, commandsFromOrchestratorTopicName } from '../doer/doer';
 import { spawn } from 'child_process';
+import { Command } from '../doer/commands';
 
 type DoerInfo = {
     started: Date;
@@ -19,6 +28,8 @@ export class Orchestrator {
     broker: string;
     kafkaConfig: KafkaConfig;
     adminClient: Admin;
+    commandProducer: Producer;
+    doerMessageConsumer: Consumer;
 
     config: Config;
     doers: { [doerId: string]: DoerInfo[] } = {};
@@ -37,8 +48,13 @@ export class Orchestrator {
         };
         const filePath = join(__dirname, configFile);
 
-        readConfigFromFile(filePath)
+        connectProducer(this.kafkaConfig)
             .pipe(
+                tap((producer) => (this.commandProducer = producer)),
+                concatMap(() => connectConsumer(this.kafkaConfig, 'Orchestrator')),
+                tap((consumer) => (this.doerMessageConsumer = consumer)),
+                // launch the producers found in the configuration
+                concatMap(() => readConfigFromFile(filePath)),
                 tap((_config) => (this.config = _config)),
                 concatMap(() => this.deleteOrchestratorMessageTopics()),
                 concatMap(() => {
@@ -128,5 +144,23 @@ export class Orchestrator {
 
     disconnect() {
         this.adminClient.disconnect();
+        this.commandProducer.disconnect();
+        this.doerMessageConsumer.disconnect();
+    }
+
+    sendCommand(command: Command, doerName: string, doerId: number) {
+        const commandTopic = commandsFromOrchestratorTopicName(doerName, doerId);
+        const message: Message = { value: JSON.stringify(command) };
+        const commandRecord: ProducerRecord = {
+            messages: [message],
+            topic: commandTopic,
+        };
+        sendRecord(this.commandProducer, commandRecord)
+            .pipe(
+                take(1), // make sure we complete the stream after sending the command
+            )
+            .subscribe({
+                error: (err) => console.error(err),
+            });
     }
 }

@@ -5,3 +5,7 @@ docker-compose -f docker-compose.2_3.yml up --force-recreate
 docker-compose -f docker-compose.2_3.yml ps
 docker-compose -f docker-compose.2_3.yml rm
 
+
+# find node processes
+ps -e|grep node
+kill -9 69409

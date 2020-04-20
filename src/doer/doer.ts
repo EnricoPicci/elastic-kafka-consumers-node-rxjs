@@ -77,10 +77,10 @@ export class Doer {
             .pipe(
                 takeUntil(
                     this.disconnected.pipe(
-                        concatMap(() => this._disconnect()),
                         concatMap(() =>
                             sendRecord(this.producer, newMessageRecord('Stop', this.messagesToOrchestratorTopic)),
                         ),
+                        tap(() => this._disconnect()),
                     ),
                 ),
             )
@@ -191,12 +191,21 @@ export class Doer {
         this.disconnected.next();
     }
     private _disconnect() {
-        // this.disconnected.next();
         this.cpuUsageStreamSubscription?.unsubscribe();
-        this.removeGroupIdJoinedListener();
-        this.producer.disconnect();
-        this.orchestratorCommandsConsumer.disconnect();
-        return this.messageConsumer.disconnect();
+        if (this.removeGroupIdJoinedListener) {
+            this.removeGroupIdJoinedListener();
+        }
+        this.producer?.disconnect();
+        this.orchestratorCommandsConsumer?.disconnect();
+        this.messageConsumer?.disconnect();
+        if (
+            !this.removeGroupIdJoinedListener ||
+            !this.producer ||
+            !this.orchestratorCommandsConsumer ||
+            !this.messageConsumer
+        ) {
+            process.exit(100);
+        }
     }
 
     get concurrency() {
