@@ -107,6 +107,13 @@ export const fetchTopicMetadata = (adminClient: Admin, topics?: string[]) => {
     return from(adminClient.fetchTopicMetadata({ topics }));
 };
 
+export const fetchTopicOffsets = (adminClient: Admin, topic: string) => {
+    return from(adminClient.fetchTopicOffsets(topic));
+};
+export const fetchOffsets = (adminClient: Admin, groupId: string, topic: string) => {
+    return from(adminClient.fetchOffsets({ groupId, topic }));
+};
+
 export const connectConsumer = (config: KafkaConfig, groupId: string) => {
     const kafka = new Kafka(config);
     const consumer = kafka.consumer({ groupId });

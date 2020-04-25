@@ -123,7 +123,7 @@ describe(`when an Orchestrator launches one Doer`, () => {
                     },
                 });
         }).timeout(100000);
-        it.only(`the Orchestrator receives a stop message`, (done) => {
+        it(`the Orchestrator receives a stop message`, (done) => {
             const configFileName = 'orchestrator-test.config.json';
             const orchestrator = new Orchestrator();
             const doerName = 'doer_2';

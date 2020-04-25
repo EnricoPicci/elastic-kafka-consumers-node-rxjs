@@ -15,8 +15,10 @@ import {
     subscribeConsumerToTopic,
     consumerMessages,
     sendRecord,
+    fetchTopicOffsets,
+    fetchOffsets,
 } from './observable-kafkajs';
-import { tap, concatMap, take } from 'rxjs/operators';
+import { tap, concatMap, take, delay, last } from 'rxjs/operators';
 import { before, it, after } from 'mocha';
 
 function _buildAdminClient(clientId: string, done: (err?) => void, result: { adminClient: Admin }) {
@@ -729,10 +731,11 @@ describe(`when a Consumer subscribes to a Topic`, () => {
                 },
             });
     });
-    after(`disconnects the Producer and the Consumer`, (done) => {
+    after(`disconnects the Producer and the Consumer and the AdminClient`, (done) => {
         producer
             .disconnect()
             .then(() => consumer.disconnect())
+            .then(() => adminClient.disconnect())
             .then(
                 () => done(),
                 (err) => done(err),
@@ -772,4 +775,152 @@ describe(`when a Consumer subscribes to a Topic`, () => {
                 },
             });
     }).timeout(60000);
+});
+
+// test fetchTopicsOffset and fetchOffsets
+describe(`when a Producer sends some records to a Topic`, () => {
+    let adminClient: Admin;
+    let newTopicName: string;
+    let producer: Producer;
+    const numberOfRecords = 6;
+    const clientId = 'FetchTopicsOffsetSendMsg';
+    const kafkaConfig: KafkaConfig = {
+        clientId,
+        brokers: testConfiguration.brokers,
+        retry: {
+            initialRetryTime: 100,
+            retries: 3,
+        },
+    };
+    before(`create the Topic and the Producer and sends the records`, (done) => {
+        newTopicName = testConfiguration.topicName + '_FetchTopicsOffset_' + Date.now().toString();
+        const topics: ITopicConfig[] = [
+            {
+                topic: newTopicName,
+            },
+        ];
+
+        const messageValues = new Array(numberOfRecords).fill(null).map((_, i) => `Message ${i}`);
+        const messages: Message[] = messageValues.map((value) => ({
+            value,
+        }));
+        const producerRecord: ProducerRecord = {
+            messages,
+            topic: newTopicName,
+        };
+        connectAdminClient(kafkaConfig)
+            .pipe(
+                tap((_adminClient) => (adminClient = _adminClient)),
+                concatMap(() => createTopics(adminClient, topics)),
+                tap(() => adminClient.disconnect()),
+                concatMap(() => connectProducer(kafkaConfig)),
+                tap((_producer) => (producer = _producer)),
+                concatMap(() => sendRecord(producer, producerRecord)),
+                tap(() => done()),
+            )
+            .subscribe({
+                error: (err) => {
+                    if (producer) {
+                        producer.disconnect();
+                    }
+                    console.error('ERROR', err);
+                    done(err);
+                },
+            });
+    });
+    after(`disconnects the AdminClient and the Producer`, (done) => {
+        adminClient
+            .disconnect()
+            .then(() => producer.disconnect())
+            .then(
+                () => done(),
+                (err) => done(err),
+            );
+    });
+    it(`the offset of the topic is equal to the number of records sent`, (done) => {
+        fetchTopicOffsets(adminClient, newTopicName)
+            .pipe(
+                tap((data) => {
+                    console.log(data.length);
+                    expect(data.length).to.equal(1); // there is just one partition
+                    expect(parseInt(data[0].offset)).to.equal(numberOfRecords);
+                }),
+            )
+            .subscribe({
+                error: (err) => {
+                    console.error('ERROR', err);
+                    done(err);
+                },
+                complete: () => {
+                    done();
+                },
+            });
+    }).timeout(30000);
+    describe(`and a Consumer reads all the records with a consumerGroup`, () => {
+        it(`if N messages are committed the offset for the consumerGroup is equal to N`, (done) => {
+            let consumer: Consumer;
+            const consumerGroupId = 'anyConsumerGroup';
+            const numberOfMessagesCommitted = 2;
+            if (numberOfMessagesCommitted > numberOfRecords) {
+                throw new Error(`The numeber of messages committed can not be greater than the records sent`)
+            }
+            connectConsumer(kafkaConfig, consumerGroupId)
+                .pipe(
+                    tap((_consumer) => (consumer = _consumer)),
+                    concatMap(() => subscribeConsumerToTopic(consumer, newTopicName)),
+                    concatMap(() => consumerMessages(consumer)),
+                    take(numberOfMessagesCommitted), // complete the observable
+                    tap((msg) => msg.done()), // commits the message
+                    delay(1000), // it takes some time before the offset is updated, so we add a delay
+                    last(), // we want to emit just once
+                    concatMap(() => fetchOffsets(adminClient, consumerGroupId, newTopicName)),
+                    tap((data) => {
+                        console.log(data.length);
+                        expect(data.length).to.equal(1); // there is just one partition
+                        expect(parseInt(data[0].offset)).to.equal(numberOfMessagesCommitted);
+                    }),
+                )
+                .subscribe({
+                    error: (err) => {
+                        consumer.disconnect();
+                        console.error('ERROR', err);
+                        done(err);
+                    },
+                    complete: () => {
+                        consumer.disconnect();
+                        done();
+                    },
+                });
+        }).timeout(30000);
+        it(`if the messages are NOT committed the offset for the consumerGroup is equal to -1`, (done) => {
+            let consumer: Consumer;
+            const consumerGroupId = 'anotherConsumerGroup';
+            connectConsumer(kafkaConfig, consumerGroupId)
+                .pipe(
+                    tap((_consumer) => (consumer = _consumer)),
+                    concatMap(() => subscribeConsumerToTopic(consumer, newTopicName)),
+                    concatMap(() => consumerMessages(consumer)),
+                    take(numberOfRecords), // complete the observable
+                    delay(1000), // it takes some time before the offset is updated, so we add a delay
+                    last(), // we want to emit just once
+                    concatMap(() => fetchOffsets(adminClient, consumerGroupId, newTopicName)),
+                    tap((data) => {
+                        console.log(data.length);
+                        expect(data.length).to.equal(1); // there is just one partition
+                        expect(parseInt(data[0].offset)).to.equal(-1);
+                    }),
+                )
+                .subscribe({
+                    error: (err) => {
+                        consumer.disconnect();
+                        console.error('ERROR', err);
+                        done(err);
+                    },
+                    complete: () => {
+                        consumer.disconnect();
+                        done();
+                    },
+                });
+        }).timeout(30000);
+    });
 });
